@@ -136,6 +136,8 @@ jobs:
           s2, count = re.subn(r'"https://[^"]*update\.json"', '"https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json"', s, count=1, flags=re.I)
           if count == 0:
               raise SystemExit("Não encontrei a URL update.json na MainActivity; interrompendo para não publicar OTA quebrado.")
+          s2 = s2.replace("CURRENT_VERSION_CODE=125", "CURRENT_VERSION_CODE=126")
+          s2 = s2.replace("CineHUB-TV/1.2.5", "CineHUB-TV/1.2.6")
           p.write_text(s2, encoding="utf-8")
           PY
           # Converte toda referência de versão da interface extraída para a versão de lançamento.
