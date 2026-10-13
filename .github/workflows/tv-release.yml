@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: cinehub-tv-release-final
+  group: cinehub-tv-release-final2
   cancel-in-progress: true
 
 jobs:
