@@ -70,7 +70,7 @@ jobs:
           root = Path("legacy/CineHUB_TV_Android/CineHUB-TV/src/main/assets/cinehub")
           index = root / "index.html"
           html = index.read_text(encoding="utf-8")
-          html = re.sub(r"CineHUB TV 1\\.8", "CineHUB TV 1.2.6", html)
+          html = re.sub(r"CineHUB TV 1\.8", "CineHUB TV 1.2.6", html)
           html = html.replace("VERSÃO 1.7", "VERSÃO 1.2.6")
           marker = '<script src="js/app.js"></script>'
           bridge = marker + '\n<script src="dados/canais.js"></script>\n<script src="js/legacy-bridge.js"></script>'
@@ -109,7 +109,7 @@ jobs:
               const channels = Array.isArray(window.catalogoCanais) ? window.catalogoCanais : [];
               if (!app || typeof app.registerContent !== "function" || !channels.length) return;
               const mapped = channels.map((c, i) => ({
-                id: "official-channel-" + (c.nome || i).toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-z0-9]+/g, "-"),
+                id: "official-channel-" + (c.nome || i).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-"),
                 title: c.nome || "Canal",
                 type: "channel",
                 view: "ao-vivo",
@@ -133,7 +133,7 @@ jobs:
           if not p.exists():
               raise SystemExit("MainActivity.java não encontrado na base Android.")
           s = p.read_text(encoding="utf-8")
-          s2, count = re.subn(r'"https://[^"]*update\\.json"', '"https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json"', s, count=1, flags=re.I)
+          s2, count = re.subn(r'"https://[^"]*update\.json"', '"https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json"', s, count=1, flags=re.I)
           if count == 0:
               raise SystemExit("Não encontrei a URL update.json na MainActivity; interrompendo para não publicar OTA quebrado.")
           p.write_text(s2, encoding="utf-8")
