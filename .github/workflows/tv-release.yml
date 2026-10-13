@@ -57,6 +57,18 @@ jobs:
           test -s "$FRONTEND/css/styles.css"
           test -s "$FRONTEND/js/app.js"
           test -s "$FRONTEND/js/webdata.js"
+          # Mantém também a interface extraída no repositório, para edição e revisão direta.
+          mkdir -p frontend
+          cp -a "$FRONTEND/." frontend/
+          find frontend -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' -o -name '*.json' -o -name '*.md' -o -name '*.txt' \) -print0 |
+            xargs -0 -r sed -i -E 's/1\.8/1.2.6/g'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(tv): extrair interface CineHUB TV 1.2.6"
+            git push origin HEAD:main
+          fi
           mkdir -p "$ASSETS"
           cp -a "$FRONTEND/index.html" "$ASSETS/index.html"
           cp -a "$FRONTEND/css" "$ASSETS/"
