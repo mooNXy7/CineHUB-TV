@@ -1,0 +1,1 @@
+<resources><style name="Theme.CineHUBTV" parent="Theme.AppCompat.NoActionBar"><item name="android:fontFamily">sans</item><item name="android:windowActionModeOverlay">true</item><item name="android:colorAccent">#E50914</item><item name="android:windowFullscreen">true</item></style></resources>

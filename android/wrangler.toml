@@ -1,0 +1,3 @@
+name = "cinehub-tv"
+compatibility_date = "2026-10-05"
+pages_build_output_dir = "CineHUB-TV/src/main/assets/cinehub"

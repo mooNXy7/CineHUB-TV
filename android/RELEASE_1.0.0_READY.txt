@@ -1,0 +1,6 @@
+CineHUB TV 1.0.0 — RELEASE_CINEHUB_TV_1.0.0
+Primeira versão oficial Android TV.
+
+Release gate verified: 2026-10-05T18:43:04.682Z
+
+RELEASE_CINEHUB_TV_1.0.0
