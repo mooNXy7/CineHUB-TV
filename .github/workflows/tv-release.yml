@@ -52,7 +52,15 @@ jobs:
           mkdir -p extracted
           unzip -q CineHUB_TV_v1.8.zip -d extracted
           FRONTEND="extracted/CineHUB_TV_v1.8"
-          ASSETS="legacy/CineHUB_TV_Android/CineHUB-TV/src/main/assets/cinehub"
+          if [ -d android/CineHUB-TV ]; then
+            ANDROID_ROOT="android"
+          else
+            mkdir -p android
+            cp -a legacy/CineHUB_TV_Android/. android/
+            ANDROID_ROOT="android"
+          fi
+          export ANDROID_ROOT
+          ASSETS="$ANDROID_ROOT/CineHUB-TV/src/main/assets/cinehub"
           test -s "$FRONTEND/index.html"
           test -s "$FRONTEND/css/styles.css"
           test -s "$FRONTEND/js/app.js"
@@ -79,7 +87,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          root = Path("legacy/CineHUB_TV_Android/CineHUB-TV/src/main/assets/cinehub")
+          root = Path("android/CineHUB-TV/src/main/assets/cinehub")
           index = root / "index.html"
           html = index.read_text(encoding="utf-8")
           html = re.sub(r"CineHUB TV 1\.8", "CineHUB TV 1.2.6", html)
@@ -141,7 +149,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
-          p = Path("legacy/CineHUB_TV_Android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java")
+          p = Path("android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java")
           if not p.exists():
               raise SystemExit("MainActivity.java não encontrado na base Android.")
           s = p.read_text(encoding="utf-8")
@@ -156,10 +164,18 @@ jobs:
           find "$ASSETS" -maxdepth 3 -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' -o -name '*.json' -o -name '*.md' -o -name '*.txt' \) -print0 |
             xargs -0 -r sed -i -E 's/1\.8/1.2.6/g'
           # Reaplica valores canônicos após a substituição geral.
-          sed -i -E 's/versionCode = [0-9]+/versionCode = 126/; s/versionName = "[^"]+"/versionName = "1.2.6"/' legacy/CineHUB_TV_Android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionCode = 126' legacy/CineHUB_TV_Android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionName = "1.2.6"' legacy/CineHUB_TV_Android/CineHUB-TV/build.gradle.kts
+          sed -i -E 's/versionCode = [0-9]+/versionCode = 126/; s/versionName = "[^"]+"/versionName = "1.2.6"/' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionCode = 126' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionName = "1.2.6"' android/CineHUB-TV/build.gradle.kts
           grep -q 'js/legacy-bridge.js' "$ASSETS/index.html"
+          # Salva a cópia Android integrada no repositório TV (sem chaves ou keystore).
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend android
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(tv): integrar projeto Android TV 1.2.6"
+            git push origin HEAD:main
+          fi
 
       - name: Configurar assinatura oficial
         env:
@@ -172,7 +188,7 @@ jobs:
           test -s "$GITHUB_WORKSPACE/cinehub-tv-release.jks"
 
       - name: Compilar APK Release
-        working-directory: legacy/CineHUB_TV_Android
+        working-directory: android
         env:
           CINEHUB_TV_KEYSTORE_PATH: ${{ github.workspace }}/cinehub-tv-release.jks
           CINEHUB_TV_KEYSTORE_PASSWORD: ${{ secrets.CINEHUB_TV_KEYSTORE_PASSWORD }}
@@ -184,7 +200,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find legacy/CineHUB_TV_Android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          APK="$(find android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           test -s "$APK"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
@@ -196,7 +212,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK="$(find legacy/CineHUB_TV_Android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
+          APK="$(find android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           mkdir -p release
           cp "$APK" release/CineHUB-TV-v1.2.6.apk
           cp "$APK" release/CineHUB-TV.apk
