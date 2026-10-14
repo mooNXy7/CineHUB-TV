@@ -504,8 +504,9 @@ class MainActivity : AppCompatActivity() {
                     content.addView(label("Não foi possível carregar as rádios. Verifique a conexão e tente novamente.", 15, MUTED, false))
                     return@runOnUiThread
                 }
-                content.addView(label("${stations.size} estações disponíveis", 13, RED, true).apply { setPadding(d(2), d(2), 0, d(8)) })
-                stations.forEach { station ->
+                content.addView(label("${stations.size} estações disponíveis · mostrando as primeiras 120", 13, RED, true).apply { setPadding(d(2), d(2), 0, d(8)) })
+                // Limit first render on low-memory TV boxes; the remote catalog remains complete.
+                stations.take(120).forEach { station ->
                     val row = LinearLayout(this).apply {
                         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                         setPadding(d(12), d(8), d(12), d(8)); background = focusBackground(PANEL)
