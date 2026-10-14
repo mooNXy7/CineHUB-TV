@@ -1,29 +1,36 @@
 # CineHUB TV — reconstrução nativa
 
-Fundação inicial do CineHUB TV em Kotlin para Android TV / TV Box. Esta branch é isolada da versão estável.
+Fundação nativa em Kotlin para Android TV / TV Box. O desenvolvimento ocorre nesta branch separada para não substituir a versão estável.
 
-## Estado desta fundação
+## Implementado nesta etapa
 
-- [x] Projeto Android Gradle em Kotlin
-- [x] Manifesto Android TV e navegação em tela cheia
-- [x] Primeira interface nativa com identidade escura/vermelha
-- [x] Workflow GitHub Actions para compilar APK de depuração
-- [ ] Importar os PNG oficiais para os recursos Android
-- [ ] Player Media3 com tela de reprodução e controle remoto
-- [ ] Catálogo real e fontes do CineHUB/SaimoPlayer
-- [ ] Guia EPG/XMLTV e canais favoritos
-- [ ] Filmes, séries, animes, doramas e rádio ligados a dados reais
-- [ ] Testes de instalação em TV Box e validação de desempenho
+- [x] Estrutura Android Gradle/Kotlin e tema escuro/vermelho
+- [x] Navegação inicial com foco por controle remoto
+- [x] Leitor do formato de catálogo `canal:`, `categoria:`, `logo:`, `fonte:`
+- [x] Carregamento assíncrono do catálogo público de referência do SaimoPlayer
+- [x] Tela inicial de Ao vivo com canais agrupados por categoria
+- [x] Tela de reprodução com Media3/ExoPlayer para fontes individuais
+- [x] Workflow GitHub Actions para tentar gerar APK de depuração
 
-Os cartões atuais são demonstração visual. Não representam catálogo conectado nem reprodução funcional ainda.
+## Ainda em desenvolvimento
 
-## Compilação
+- [ ] Confirmar o resultado real da compilação no GitHub Actions
+- [ ] Integrar logos PNG oficiais do CineHUB nos recursos Android
+- [ ] Fallback automático entre fontes do mesmo canal e validação de links
+- [ ] Busca, filtros e navegação de catálogo sem sobrecarregar TV Boxes fracas
+- [ ] Guia EPG/XMLTV
+- [ ] Filmes, séries, animes, doramas, favoritos, histórico e rádios
+- [ ] Testes reais de instalação e reprodução em Android TV/TV Box
 
-O GitHub Actions executa `gradle assembleDebug` com JDK 17 e publica o APK de teste como artefato do workflow. APK de depuração não deve ser tratado como lançamento oficial assinado.
+**Importante:** fontes públicas podem falhar, exigir cabeçalhos específicos ou não ter autorização de distribuição. A tela atual tenta tocar apenas a primeira fonte do canal; ainda não implementa fallback automático. Não considerar esta branch uma versão final.
 
-## Referências de arquitetura
+## Build
 
-- SaimoTV Android: https://github.com/gabrielsaimo/SaimoTV-Android
-- SaimoPlayer e dados de catálogo: https://github.com/gabrielsaimo/SaimoPlayer
+O workflow usa JDK 17 e Gradle 8.9 para executar `assembleDebug`. O APK gerado é de depuração e não é o pacote oficial de lançamento.
 
-A adaptação deve preservar os créditos/licenças aplicáveis e manter a identidade visual própria do CineHUB.
+## Referências de arquitetura e dados
+
+- [SaimoTV Android](https://github.com/gabrielsaimo/SaimoTV-Android)
+- [SaimoPlayer e catálogo](https://github.com/gabrielsaimo/SaimoPlayer)
+
+A adaptação deve preservar os créditos/licenças aplicáveis e manter identidade visual própria do CineHUB.
