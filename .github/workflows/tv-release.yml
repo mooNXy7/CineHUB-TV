@@ -1,4 +1,4 @@
-name: CineHUB TV 1.2.6 — Integrar, validar e publicar
+name: CineHUB TV 1.2.7 — Integrar, validar e publicar
 
 on:
   push:
@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: cinehub-tv-release-final2
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -44,7 +44,7 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Extrair e integrar o pacote visual 1.8 como 1.2.6
+      - name: Extrair e integrar o pacote visual 1.8 como 1.2.7
         shell: bash
         run: |
           set -euo pipefail
@@ -68,13 +68,26 @@ jobs:
           # Mantém também a interface extraída no repositório, para edição e revisão direta.
           mkdir -p frontend
           cp -a "$FRONTEND/." frontend/
-          find frontend -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' -o -name '*.json' -o -name '*.md' -o -name '*.txt' \) -print0 |
-            xargs -0 -r sed -i -E 's/1\.8/1.2.6/g'
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("frontend/index.html")
+          html = p.read_text(encoding="utf-8")
+          html = html.replace("<title>CineHUB TV 1.8</title>", "<title>CineHUB TV 1.2.7</title>")
+          html = html.replace("VERSÃO 1.7 · EXPERIÊNCIA DE TV", "VERSÃO 1.2.7 · EXPERIÊNCIA DE TV")
+          p.write_text(html, encoding="utf-8")
+          css = Path("frontend/css/styles.css")
+          text = css.read_text(encoding="utf-8").replace("/* CineHUB TV 1.8 —", "/* CineHUB TV 1.2.7 —")
+          css.write_text(text, encoding="utf-8")
+          readme = Path("frontend/README.md")
+          if readme.exists():
+              text = readme.read_text(encoding="utf-8").replace("# CineHUB TV 1.8", "# CineHUB TV 1.2.7").replace("## Versão 1.8", "## Versão 1.2.7")
+              readme.write_text(text, encoding="utf-8")
+          PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend
           if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): extrair interface CineHUB TV 1.2.6"
+            git commit -m "chore(tv): extrair interface CineHUB TV 1.2.7"
             git push origin HEAD:main
           fi
           mkdir -p "$ASSETS"
@@ -90,8 +103,8 @@ jobs:
           root = Path("android/CineHUB-TV/src/main/assets/cinehub")
           index = root / "index.html"
           html = index.read_text(encoding="utf-8")
-          html = re.sub(r"CineHUB TV 1\.8", "CineHUB TV 1.2.6", html)
-          html = html.replace("VERSÃO 1.7", "VERSÃO 1.2.6")
+          html = re.sub(r"CineHUB TV 1\.8", "CineHUB TV 1.2.7", html)
+          html = html.replace("VERSÃO 1.7", "VERSÃO 1.2.7")
           marker = '<script src="js/app.js"></script>'
           bridge = marker + '\n<script src="dados/canais.js"></script>\n<script src="js/legacy-bridge.js"></script>'
           if "js/legacy-bridge.js" not in html:
@@ -106,16 +119,16 @@ jobs:
               source = source.replace("const catalogoCanais =", "window.catalogoCanais =")
               channels.write_text(source, encoding="utf-8")
           version = root / "CINEHUB_VERSION.txt"
-          version.write_text("1.2.6\n", encoding="utf-8")
+          version.write_text("1.2.7\n", encoding="utf-8")
           manifest = root / "update.json"
           import json
           data = json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {}
           data.update({
             "app": "CineHUB TV",
-            "version": "1.2.6",
+            "version": "1.2.7",
             "versionCode": 126,
-            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.6",
-            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.6/CineHUB-TV-v1.2.6.apk",
+            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.7",
+            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.7/CineHUB-TV-v1.2.7.apk",
             "sha256": "",
             "channel": "stable"
           })
@@ -157,23 +170,32 @@ jobs:
           if count == 0:
               raise SystemExit("Não encontrei a URL update.json na MainActivity; interrompendo para não publicar OTA quebrado.")
           s2 = s2.replace("CURRENT_VERSION_CODE=125", "CURRENT_VERSION_CODE=126")
-          s2 = s2.replace("CineHUB-TV/1.2.5", "CineHUB-TV/1.2.6")
+          s2 = re.sub(r"CineHUB-TV/1\\.[0-9.]+", "CineHUB-TV/1.2.7", s2)
           p.write_text(s2, encoding="utf-8")
           PY
-          # Converte toda referência de versão da interface extraída para a versão de lançamento.
-          find "$ASSETS" -maxdepth 3 -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' -o -name '*.json' -o -name '*.md' -o -name '*.txt' \) -print0 |
-            xargs -0 -r sed -i -E 's/1\.8/1.2.6/g'
-          # Reaplica valores canônicos após a substituição geral.
-          sed -i -E 's/versionCode = [0-9]+/versionCode = 126/; s/versionName = "[^"]+"/versionName = "1.2.6"/' android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionCode = 126' android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionName = "1.2.6"' android/CineHUB-TV/build.gradle.kts
+          # Altera apenas rótulos de versão; não modifica decimais CSS, SVG ou código JS.
+          python3 - <<'PY'
+          from pathlib import Path
+          root = Path("android/CineHUB-TV/src/main/assets/cinehub")
+          p = root / "css/styles.css"
+          css = p.read_text(encoding="utf-8").replace("/* CineHUB TV 1.8 —", "/* CineHUB TV 1.2.7 —")
+          p.write_text(css, encoding="utf-8")
+          p = root / "index.html"
+          html = p.read_text(encoding="utf-8")
+          html = html.replace("<title>CineHUB TV 1.8</title>", "<title>CineHUB TV 1.2.7</title>")
+          html = html.replace("VERSÃO 1.7 · EXPERIÊNCIA DE TV", "VERSÃO 1.2.7 · EXPERIÊNCIA DE TV")
+          p.write_text(html, encoding="utf-8")
+          PY
+          sed -i -E 's/versionCode = [0-9]+/versionCode = 127/; s/versionName = "[^"]+"/versionName = "1.2.7"/' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionCode = 127' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionName = "1.2.7"' android/CineHUB-TV/build.gradle.kts
           grep -q 'js/legacy-bridge.js' "$ASSETS/index.html"
           # Salva a cópia Android integrada no repositório TV (sem chaves ou keystore).
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add frontend android
           if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): integrar projeto Android TV 1.2.6"
+            git commit -m "chore(tv): integrar projeto Android TV 1.2.7"
             git push origin HEAD:main
           fi
 
@@ -214,39 +236,39 @@ jobs:
           set -euo pipefail
           APK="$(find android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           mkdir -p release
-          cp "$APK" release/CineHUB-TV-v1.2.6.apk
+          cp "$APK" release/CineHUB-TV-v1.2.7.apk
           cp "$APK" release/CineHUB-TV.apk
-          sha256sum release/CineHUB-TV-v1.2.6.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
-          SHA="$(sha256sum release/CineHUB-TV-v1.2.6.apk | awk '{print $1}')"
+          sha256sum release/CineHUB-TV-v1.2.7.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
+          SHA="$(sha256sum release/CineHUB-TV-v1.2.7.apk | awk '{print $1}')"
           python3 - "$SHA" <<'PY'
           import json, sys
           from pathlib import Path
           sha = sys.argv[1]
           data = {
             "app": "CineHUB TV",
-            "version": "1.2.6",
+            "version": "1.2.7",
             "versionCode": 126,
-            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.6",
-            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.6/CineHUB-TV-v1.2.6.apk",
+            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.7",
+            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.7/CineHUB-TV-v1.2.7.apk",
             "sha256": sha,
             "channel": "stable"
           }
           Path("update.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
           PY
 
-      - name: Publicar release CineHUB TV v1.2.6
+      - name: Publicar release CineHUB TV v1.2.7
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.6
+          tag_name: v1.2.7
           target_commitish: main
-          name: CineHUB TV v1.2.6
+          name: CineHUB TV v1.2.7
           body: |
             Atualização do CineHUB TV com a interface extraída do pacote enviado e integrada à base Android TV estável 1.2.5.
-            - versionCode 126 / versionName 1.2.6
+            - versionCode 127 / versionName 1.2.7
             - Mantém o applicationId com.cinehub.tv para atualização sobre a instalação existente.
             - APK validado com zipalign e apksigner antes da publicação.
           files: |
-            release/CineHUB-TV-v1.2.6.apk
+            release/CineHUB-TV-v1.2.7.apk
             release/CineHUB-TV.apk
             release/SHA256SUMS.txt
           generate_release_notes: true
@@ -263,6 +285,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add update.json
           if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): atualizar manifesto OTA para v1.2.6"
+            git commit -m "chore(tv): atualizar manifesto OTA para v1.2.7"
             git push origin HEAD:main
           fi
