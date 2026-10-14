@@ -28,6 +28,9 @@ private const val WHITE = 0xFFF7F7F7.toInt()
 private const val MUTED = 0xFFAAAAAA.toInt()
 
 class MainActivity : AppCompatActivity() {
+    private fun d(value: Int): Int =
+        (value * resources.displayMetrics.density + 0.5f).toInt().coerceAtLeast(if (value > 0) 1 else value)
+
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private val sections = listOf("Início", "Ao vivo", "Filmes", "Séries", "Animes", "Doramas", "Rádio", "Minha lista", "Buscar", "Ajustes")
@@ -49,7 +52,7 @@ class MainActivity : AppCompatActivity() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(BG)
-            setPadding(42, 20, 42, 20)
+            setPadding(d(42), d(20), d(42), d(20))
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -60,13 +63,13 @@ class MainActivity : AppCompatActivity() {
         val spacer = View(this)
         header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
         header.addView(label("BR  •  TV", 14, MUTED, false))
-        root.addView(header, LinearLayout.LayoutParams(-1, 54))
+        root.addView(header, LinearLayout.LayoutParams(-1, d(54)))
 
         val navScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         sections.forEachIndexed { index, title ->
             val item = label(title, 15, if (index == 0) WHITE else MUTED, index == 0).apply {
-                setPadding(16, 14, 16, 14)
+                setPadding(d(16), d(14), d(16), d(14))
                 isFocusable = true
                 isFocusableInTouchMode = true
                 background = focusBackground()
@@ -79,10 +82,10 @@ class MainActivity : AppCompatActivity() {
             nav.addView(item)
         }
         navScroll.addView(nav)
-        root.addView(navScroll, LinearLayout.LayoutParams(-1, 54))
+        root.addView(navScroll, LinearLayout.LayoutParams(-1, d(54)))
 
         val scroll = ScrollView(this)
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 16, 0, 20) }
+        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(0), d(16), d(0), d(20)) }
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -100,7 +103,7 @@ class MainActivity : AppCompatActivity() {
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.BOTTOM
-            setPadding(28, 24, 28, 24)
+            setPadding(d(28), d(24), d(28), d(24))
             setBackgroundColor(0xFF241012.toInt())
         }
         hero.addView(label("CINEHUB TV  •  SUA CENTRAL DE FILMES", 13, RED, true))
@@ -109,12 +112,12 @@ class MainActivity : AppCompatActivity() {
             "Séries" -> "Sua próxima maratona começa aqui"
             "Buscar" -> "Encontre algo para assistir"
             else -> "Entre no seu próximo universo"
-        }, 30, WHITE, true).apply { setPadding(0, 10, 0, 8) })
+        }, 30, WHITE, true).apply { setPadding(d(0), d(10), d(0), d(8)) })
         hero.addView(label("A experiência CineHUB está sendo preparada para sua TV.", 16, MUTED, false))
-        content.addView(hero, LinearLayout.LayoutParams(-1, 210))
+        content.addView(hero, LinearLayout.LayoutParams(-1, d(210)))
 
         content.addView(label(if (section == "Início") "Continue assistindo" else section, 22, WHITE, true).apply {
-            setPadding(2, 24, 0, 12)
+            setPadding(d(2), d(24), d(0), d(12))
         })
         val rowScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -122,32 +125,32 @@ class MainActivity : AppCompatActivity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.BOTTOM
-                setPadding(16, 12, 16, 16)
+                setPadding(d(16), d(12), d(16), d(16))
                 isFocusable = true
                 isFocusableInTouchMode = true
                 background = focusBackground(if (i == 0) 0xFF351015.toInt() else PANEL)
                 addView(label("CINEHUB", 11, RED, true))
-                addView(label(name, 18, WHITE, true).apply { setPadding(0, 8, 0, 0) })
-                addView(label("Conteúdo de demonstração", 12, MUTED, false).apply { setPadding(0, 5, 0, 0) })
+                addView(label(name, 18, WHITE, true).apply { setPadding(d(0), d(8), d(0), d(0)) })
+                addView(label("Conteúdo de demonstração", 12, MUTED, false).apply { setPadding(d(0), d(5), d(0), d(0)) })
             }
-            val params = LinearLayout.LayoutParams(240, 132)
-            params.marginEnd = 14
+            val params = LinearLayout.LayoutParams(d(240), d(132))
+            params.marginEnd = d(14)
             row.addView(card, params)
         }
         rowScroll.addView(row)
-        content.addView(rowScroll, LinearLayout.LayoutParams(-1, 142))
+        content.addView(rowScroll, LinearLayout.LayoutParams(-1, d(142)))
         content.addView(label("Fundação 0.2.0  •  Interface nativa em construção", 12, MUTED, false).apply {
-            setPadding(2, 22, 0, 0)
+            setPadding(d(2), d(22), d(0), d(0))
         })
     }
 
     private fun showMyList() {
         content.removeAllViews()
-        content.addView(label("Minha lista", 28, WHITE, true).apply { setPadding(0, 12, 0, 8) })
+        content.addView(label("Minha lista", 28, WHITE, true).apply { setPadding(d(0), d(12), d(0), d(8)) })
         content.addView(label("Seus canais favoritos ficam salvos neste aparelho.", 14, MUTED, false).apply {
-            setPadding(0, 0, 0, 14)
+            setPadding(d(0), d(0), d(0), d(14))
         })
-        val status = label("", 14, MUTED, false).apply { setPadding(2, 12, 0, 12) }
+        val status = label("", 14, MUTED, false).apply { setPadding(d(2), d(12), d(0), d(12)) }
         content.addView(status)
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(results)
@@ -183,23 +186,23 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSettings() {
         content.removeAllViews()
-        content.addView(label("Ajustes", 28, WHITE, true).apply { setPadding(0, 12, 0, 8) })
+        content.addView(label("Ajustes", 28, WHITE, true).apply { setPadding(d(0), d(12), d(0), d(8)) })
         content.addView(label("Preferências e manutenção do CineHUB TV", 14, MUTED, false).apply {
-            setPadding(0, 0, 0, 18)
+            setPadding(d(0), d(0), d(0), d(18))
         })
         val status = label("Catálogo: ${if (channels.isEmpty()) "ainda não carregado" else "${channels.size} canais em memória"}", 15, MUTED, false).apply {
-            setPadding(0, 10, 0, 14)
+            setPadding(d(0), d(10), d(0), d(14))
         }
         content.addView(status)
         fun action(title: String, description: String, onClick: () -> Unit) {
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(18, 14, 18, 14)
+                setPadding(d(18), d(14), d(18), d(14))
                 background = focusBackground(PANEL)
                 isFocusable = true
                 isFocusableInTouchMode = true
                 addView(label(title, 17, WHITE, true))
-                addView(label(description, 13, MUTED, false).apply { setPadding(0, 5, 0, 0) })
+                addView(label(description, 13, MUTED, false).apply { setPadding(d(0), d(5), d(0), d(0)) })
                 setOnClickListener { onClick() }
             }
             content.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 })
@@ -232,17 +235,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun showInfo(title: String, message: String) {
         content.removeAllViews()
-        content.addView(label(title, 26, WHITE, true).apply { setPadding(0, 18, 0, 12) })
+        content.addView(label(title, 26, WHITE, true).apply { setPadding(d(0), d(18), d(0), d(12)) })
         content.addView(label(message, 16, MUTED, false))
     }
 
     private fun showCatalogSearch() {
         content.removeAllViews()
         content.addView(label("Buscar no CineHUB", 26, WHITE, true).apply {
-            setPadding(0, 12, 0, 8)
+            setPadding(d(0), d(12), d(0), d(8))
         })
         content.addView(label("Pesquise no catálogo conectado. Nesta etapa, os resultados disponíveis são canais ao vivo; filmes e séries serão conectados às suas fontes nas próximas fases.", 14, MUTED, false).apply {
-            setPadding(0, 0, 0, 14)
+            setPadding(d(0), d(0), d(0), d(14))
         })
         val search = EditText(this).apply {
             hint = "Digite nome do canal ou categoria…"
@@ -250,15 +253,15 @@ class MainActivity : AppCompatActivity() {
             textSize = 16f
             setTextColor(WHITE)
             setHintTextColor(MUTED)
-            setPadding(18, 10, 18, 10)
+            setPadding(d(18), d(10), d(18), d(10))
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             background = focusBackground(PANEL)
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        content.addView(search, LinearLayout.LayoutParams(-1, 54))
+        content.addView(search, LinearLayout.LayoutParams(-1, d(54)))
         val status = label("Preparando pesquisa…", 14, MUTED, false).apply {
-            setPadding(2, 12, 0, 12)
+            setPadding(d(2), d(12), d(0), d(12))
         }
         content.addView(status)
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -290,10 +293,10 @@ class MainActivity : AppCompatActivity() {
     private fun showLiveChannels() {
         content.removeAllViews()
         content.addView(label("Canais ao vivo", 26, WHITE, true).apply {
-            setPadding(0, 12, 0, 8)
+            setPadding(d(0), d(12), d(0), d(8))
         })
         content.addView(label("Pesquise por nome ou categoria. Se um canal tiver mais de uma fonte, o player tentará alternativas quando necessário.", 14, MUTED, false).apply {
-            setPadding(0, 0, 0, 14)
+            setPadding(d(0), d(0), d(0), d(14))
         })
         val search = EditText(this).apply {
             hint = "Buscar canal…"
@@ -301,15 +304,15 @@ class MainActivity : AppCompatActivity() {
             textSize = 16f
             setTextColor(WHITE)
             setHintTextColor(MUTED)
-            setPadding(18, 10, 18, 10)
+            setPadding(d(18), d(10), d(18), d(10))
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             background = focusBackground(PANEL)
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        content.addView(search, LinearLayout.LayoutParams(-1, 54))
+        content.addView(search, LinearLayout.LayoutParams(-1, d(54)))
         val status = label("Carregando catálogo público…", 14, MUTED, false).apply {
-            setPadding(2, 12, 0, 12)
+            setPadding(d(2), d(12), d(0), d(12))
         }
         content.addView(status)
         val rowsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -359,19 +362,28 @@ class MainActivity : AppCompatActivity() {
         }
         if (filtered.isEmpty()) {
             rowsContainer.addView(label("Nenhum canal encontrado. Tente outro nome ou categoria.", 16, MUTED, false).apply {
-                setPadding(2, 22, 0, 22)
+                setPadding(d(2), d(22), d(0), d(22))
             })
             return
         }
-        filtered.groupBy { it.category }.toSortedMap().forEach { (category, list) ->
-            rowsContainer.addView(label(category, 19, WHITE, true).apply { setPadding(0, 14, 0, 8) })
+        if (filtered.size > 80) {
+            rowsContainer.addView(label("Mostrando até 10 canais por categoria e 8 categorias para manter a TV fluida. Use a busca para localizar outros canais.", 13, MUTED, false).apply {
+                setPadding(d(2), d(0), d(0), d(8))
+            })
+        }
+        // Limita a quantidade de Views criada em um único frame. A lista completa
+        // continua disponível pela busca, mas não inflamos milhares de cards de uma vez.
+        val grouped = filtered.groupBy { it.category }.toSortedMap()
+        val visibleGroups = grouped.entries.take(8)
+        visibleGroups.forEach { (category, list) ->
+            rowsContainer.addView(label(category, 19, WHITE, true).apply { setPadding(d(0), d(14), d(0), d(8)) })
             val rowScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            list.forEach { channel ->
+            list.take(10).forEach { channel ->
                 val card = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(16, 12, 16, 12)
+                    setPadding(d(16), d(12), d(16), d(12))
                     background = focusBackground(PANEL)
                     isFocusable = true
                     isFocusableInTouchMode = true
@@ -383,7 +395,7 @@ class MainActivity : AppCompatActivity() {
                     val heart = label(if (favoriteNames.contains(channel.name)) "♥" else "♡", 22,
                         if (favoriteNames.contains(channel.name)) RED else MUTED, true).apply {
                         isFocusable = true
-                        setPadding(10, 0, 2, 0)
+                        setPadding(d(10), d(0), d(2), d(0))
                         contentDescription = "Adicionar ou remover ${channel.name} dos favoritos"
                         setOnClickListener {
                             toggleFavorite(channel)
@@ -404,16 +416,16 @@ class MainActivity : AppCompatActivity() {
                                 error(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
                             }
                         }
-                        addView(logoView, LinearLayout.LayoutParams(56, 40).apply { topMargin = 4 })
+                        addView(logoView, LinearLayout.LayoutParams(d(56), d(40)).apply { topMargin = 4 })
                     }
-                    addView(label(channel.name, 16, WHITE, true).apply { setPadding(0, 6, 0, 0) })
+                    addView(label(channel.name, 16, WHITE, true).apply { setPadding(d(0), d(6), d(0), d(0)) })
                     addView(label(
                         when (channel.sources.size) {
                             0 -> "Sem fonte"
                             1 -> "1 fonte disponível"
                             else -> "${channel.sources.size} fontes disponíveis"
                         }, 12, MUTED, false
-                    ).apply { setPadding(0, 4, 0, 0) })
+                    ).apply { setPadding(d(0), d(4), d(0), d(0)) })
                     setOnClickListener {
                         if (channel.sources.isEmpty()) {
                             status.text = "Este canal não possui uma fonte disponível."
@@ -426,12 +438,12 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
-                val lp = LinearLayout.LayoutParams(230, 100)
-                lp.marginEnd = 12
+                val lp = LinearLayout.LayoutParams(d(230), d(100))
+                lp.marginEnd = d(12)
                 row.addView(card, lp)
             }
             rowScroll.addView(row)
-            rowsContainer.addView(rowScroll, LinearLayout.LayoutParams(-1, 110))
+            rowsContainer.addView(rowScroll, LinearLayout.LayoutParams(-1, d(110)))
         }
     }
 
@@ -452,8 +464,8 @@ class MainActivity : AppCompatActivity() {
     private fun focusBackground(color: Int = PANEL): android.graphics.drawable.Drawable =
         android.graphics.drawable.GradientDrawable().apply {
             setColor(color)
-            cornerRadius = 12f
-            setStroke(2, 0xFF4A4A4A.toInt())
+            cornerRadius = d(12.toInt()).toFloat()
+            setStroke(d(2), 0xFF4A4A4A.toInt())
         }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
