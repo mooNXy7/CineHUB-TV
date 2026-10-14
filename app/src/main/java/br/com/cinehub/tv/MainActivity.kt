@@ -32,12 +32,14 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private var channels: List<TvChannel> = emptyList()
     private var currentSection = "Início"
+    private val favoriteNames = linkedSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        favoriteNames.addAll(getSharedPreferences("cinehub-tv", MODE_PRIVATE).getStringSet("favorite_channels", emptySet()).orEmpty())
         buildHome()
     }
 
@@ -90,6 +92,7 @@ class MainActivity : AppCompatActivity() {
         content.removeAllViews()
         if (section == "Ao vivo") { showLiveChannels(); return }
         if (section == "Buscar") { showCatalogSearch(); return }
+        if (section == "Minha lista") { showMyList(); return }
         if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -133,6 +136,45 @@ class MainActivity : AppCompatActivity() {
         content.addView(label("Fundação 0.2.0  •  Interface nativa em construção", 12, MUTED, false).apply {
             setPadding(2, 22, 0, 0)
         })
+    }
+
+    private fun showMyList() {
+        content.removeAllViews()
+        content.addView(label("Minha lista", 28, WHITE, true).apply { setPadding(0, 12, 0, 8) })
+        content.addView(label("Seus canais favoritos ficam salvos neste aparelho.", 14, MUTED, false).apply {
+            setPadding(0, 0, 0, 14)
+        })
+        val status = label("", 14, MUTED, false).apply { setPadding(2, 12, 0, 12) }
+        content.addView(status)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(results)
+        if (channels.isEmpty()) {
+            status.text = if (favoriteNames.isEmpty()) "Ainda não há favoritos. Abra Ao vivo e toque no coração de um canal." else "Carregando seus canais favoritos…"
+            io.execute {
+                try {
+                    val loaded = CatalogRepository.loadChannels()
+                    runOnUiThread {
+                        channels = loaded
+                        val favorites = loaded.filter { favoriteNames.contains(it.name) }
+                        status.text = if (favorites.isEmpty()) "Ainda não há favoritos. Abra Ao vivo e toque no coração de um canal." else "${favorites.size} canal(is) favorito(s)"
+                        renderChannelRows(favorites, results, status, "")
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { status.text = "Não foi possível carregar os favoritos. Verifique a conexão." }
+                }
+            }
+        } else {
+            val favorites = channels.filter { favoriteNames.contains(it.name) }
+            status.text = if (favorites.isEmpty()) "Ainda não há favoritos. Abra Ao vivo e toque no coração de um canal." else "${favorites.size} canal(is) favorito(s)"
+            renderChannelRows(favorites, results, status, "")
+        }
+    }
+
+    private fun toggleFavorite(channel: TvChannel) {
+        if (!favoriteNames.add(channel.name)) favoriteNames.remove(channel.name)
+        getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
+            .putStringSet("favorite_channels", favoriteNames.toSet())
+            .apply()
     }
 
     private fun showInfo(title: String, message: String) {
@@ -280,7 +322,25 @@ class MainActivity : AppCompatActivity() {
                     background = focusBackground(PANEL)
                     isFocusable = true
                     isFocusableInTouchMode = true
-                    addView(label("AO VIVO", 10, RED, true))
+                    val topLine = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                    }
+                    topLine.addView(label("AO VIVO", 10, RED, true), LinearLayout.LayoutParams(0, -2, 1f))
+                    val heart = label(if (favoriteNames.contains(channel.name)) "♥" else "♡", 22,
+                        if (favoriteNames.contains(channel.name)) RED else MUTED, true).apply {
+                        isFocusable = true
+                        setPadding(10, 0, 2, 0)
+                        contentDescription = "Adicionar ou remover ${channel.name} dos favoritos"
+                        setOnClickListener {
+                            toggleFavorite(channel)
+                            text = if (favoriteNames.contains(channel.name)) "♥" else "♡"
+                            setTextColor(if (favoriteNames.contains(channel.name)) RED else MUTED)
+                            if (currentSection == "Minha lista") showMyList()
+                        }
+                    }
+                    topLine.addView(heart)
+                    addView(topLine)
                     addView(label(channel.name, 16, WHITE, true).apply { setPadding(0, 6, 0, 0) })
                     addView(label(
                         when (channel.sources.size) {
