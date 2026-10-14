@@ -1,4 +1,4 @@
-name: CineHUB TV 1.2.8 — TV layout test
+name: CineHUB TV 1.2.9 — TV layout test
 
 on:
   push:
@@ -8,6 +8,8 @@ on:
       - "android/CineHUB-TV/src/main/assets/cinehub/**"
       - "android/CineHUB-TV/build.gradle.kts"
       - "android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java"
+      - "android/CineHUB-TV/src/main/java/com/cinehub/tv/*.kt"
+      - "android/build.gradle.kts"
       - ".github/workflows/tv-release.yml"
   workflow_dispatch:
 
@@ -42,23 +44,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i -E 's/versionCode = [0-9]+/versionCode = 128/; s/versionName = "[^"]+"/versionName = "1.2.8"/' android/CineHUB-TV/build.gradle.kts
+          sed -i -E 's/versionCode = [0-9]+/versionCode = 129/; s/versionName = "[^"]+"/versionName = "1.2.9"/' android/CineHUB-TV/build.gradle.kts
           python3 - <<'PY'
           from pathlib import Path
           import re
           p = Path("android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java")
           s = p.read_text(encoding="utf-8")
-          s = re.sub(r"CURRENT_VERSION_CODE=\d+", "CURRENT_VERSION_CODE=128", s)
-          s = re.sub(r"CineHUB-TV/1\.[0-9.]+", "CineHUB-TV/1.2.8", s)
+          s = re.sub(r"CURRENT_VERSION_CODE=\d+", "CURRENT_VERSION_CODE=129", s)
+          s = re.sub(r"CineHUB-TV/1\.[0-9.]+", "CineHUB-TV/1.2.9", s)
           p.write_text(s, encoding="utf-8")
           p = Path("android/CineHUB-TV/src/main/assets/cinehub/index.html")
           s = p.read_text(encoding="utf-8")
-          s = s.replace("CineHUB TV 1.2.7", "CineHUB TV 1.2.8").replace("VERSÃO 1.2.7", "VERSÃO 1.2.8")
+          s = s.replace("CineHUB TV 1.2.7", "CineHUB TV 1.2.9").replace("VERSÃO 1.2.7", "VERSÃO 1.2.9")
           p.write_text(s, encoding="utf-8")
-          Path("android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt").write_text("1.2.8\\n", encoding="utf-8")
+          Path("android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt").write_text("1.2.9\n", encoding="utf-8")
           PY
           grep -q 'versionCode = 128' android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionName = "1.2.8"' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionName = "1.2.9"' android/CineHUB-TV/build.gradle.kts
 
       - name: Decode official signing key
         env:
@@ -90,20 +92,20 @@ jobs:
           "$ZIPALIGN" -c -P 16 -v 4 "$APK"
           "$APKSIGNER" verify --verbose "$APK"
           mkdir -p release
-          cp "$APK" release/CineHUB-TV-v1.2.8.apk
+          cp "$APK" release/CineHUB-TV-v1.2.9.apk
           cp "$APK" release/CineHUB-TV.apk
-          sha256sum release/CineHUB-TV-v1.2.8.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
-          SHA="$(sha256sum release/CineHUB-TV-v1.2.8.apk | awk '{print $1}')"
+          sha256sum release/CineHUB-TV-v1.2.9.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
+          SHA="$(sha256sum release/CineHUB-TV-v1.2.9.apk | awk '{print $1}')"
           python3 - "$SHA" <<'PY'
           import json, sys
           from pathlib import Path
           sha = sys.argv[1]
           data = {
             "app": "CineHUB TV",
-            "version": "1.2.8",
+            "version": "1.2.9",
             "versionCode": 128,
-            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.8",
-            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.8/CineHUB-TV-v1.2.8.apk",
+            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.9",
+            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.9/CineHUB-TV-v1.2.9.apk",
             "sha256": sha,
             "channel": "stable"
           }
@@ -113,14 +115,14 @@ jobs:
       - name: Publish test release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.8
-          name: CineHUB TV v1.2.8 — Teste de layout para TV
+          tag_name: v1.2.9
+          name: CineHUB TV v1.2.9 — Teste de layout para TV
           body: |
             Versão experimental para investigar o dimensionamento da interface em Android TV/WebView.
-            Foco: largura do viewport, fileiras horizontais e grades das telas internas.
+            Primeira etapa da migração nativa: habilita Kotlin e centraliza o modo imersivo Android; a interface web permanece temporariamente para evitar perda de funcionalidades.
             Teste na televisão antes de considerar esta versão validada.
           files: |
-            release/CineHUB-TV-v1.2.8.apk
+            release/CineHUB-TV-v1.2.9.apk
             release/CineHUB-TV.apk
             release/SHA256SUMS.txt
           draft: false
@@ -135,6 +137,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add update.json android/CineHUB-TV/build.gradle.kts android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java android/CineHUB-TV/src/main/assets/cinehub/index.html android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt
           if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): prepare CineHUB TV 1.2.8 test build"
+            git commit -m "chore(tv): prepare CineHUB TV 1.2.9 test build"
             git push origin HEAD:main
           fi
