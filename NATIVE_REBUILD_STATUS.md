@@ -4,7 +4,7 @@ Branch de trabalho: `native-kotlin-foundation`
 
 ## Progresso geral
 
-Estimativa de planejamento: **26% da reconstrução completa**. A base técnica já compila, mas as áreas de conteúdo ainda não estão completas e não houve validação em Android TV físico.
+Estimativa de planejamento: **28% da reconstrução completa**. A base técnica já compila, mas as áreas de conteúdo ainda não estão completas e não houve validação em Android TV físico.
 
 ## Concluído
 
@@ -18,7 +18,7 @@ Estimativa de planejamento: **26% da reconstrução completa**. A base técnica 
 
 ## Em andamento / próximo ciclo\n\n- [x] Build confirmado após pesquisa global, favoritos, carregamento de logos e fallback visual.
 
-- [ ] Aplicar os arquivos oficiais de identidade visual como recursos locais do app (logo, ícone e splash).
+- [x] Adicionar ícone vetorial nativo e tela inicial escura com a marca CineHUB (os arquivos oficiais PNG ainda precisam ser integrados).
 - [ ] Refinar foco, tamanhos e navegação por controle remoto em telas de TV.
 - [x] Implementar pesquisa por nome/categoria na seção Ao vivo e conectar a tela Buscar ao catálogo de canais.
 - [x] Exibir logos dos canais com carregamento assíncrono e fallback visual.
