@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
@@ -9,8 +10,8 @@ android {
         applicationId = "com.cinehub.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = 128
-        versionName = "1.2.8"
+        versionCode = 129
+        versionName = "1.2.9"
     }
 
     signingConfigs {
@@ -43,7 +44,7 @@ android {
 
 configurations.all {
     resolutionStrategy.eachDependency {
-        if (requested.group == "org.jetbrains.kotlin") useVersion("1.8.22")
+        if (requested.group == "org.jetbrains.kotlin") useVersion("2.0.21")
     }
 }
 
