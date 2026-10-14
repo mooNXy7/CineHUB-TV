@@ -95,53 +95,187 @@ class MainActivity : AppCompatActivity() {
     private fun showSection(section: String) {
         currentSection = section
         content.removeAllViews()
-        if (section == "Ao vivo") { showLiveChannels(); return }
-        if (section == "Buscar") { showCatalogSearch(); return }
-        if (section == "Minha lista") { showMyList(); return }
-        if (section == "Ajustes") { showSettings(); return }
-        if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
+        when (section) {
+            "Ao vivo" -> { showLiveChannels(); return }
+            "Buscar" -> { showCatalogSearch(); return }
+            "Minha lista" -> { showMyList(); return }
+            "Ajustes" -> { showSettings(); return }
+            "Rádio" -> { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
+            "Filmes", "Séries", "Animes", "Doramas" -> { showMediaSection(section); return }
+        }
+        showHomeLanding()
+    }
+
+    private fun showHomeLanding() {
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.BOTTOM
             setPadding(d(28), d(24), d(28), d(24))
-            setBackgroundColor(0xFF241012.toInt())
+            background = focusBackground(0xFF241012.toInt())
         }
         hero.addView(label("CINEHUB TV  •  SUA CENTRAL DE FILMES", 13, RED, true))
-        hero.addView(label(when (section) {
-            "Filmes" -> "Qual é o filme de hoje?"
-            "Séries" -> "Sua próxima maratona começa aqui"
-            "Buscar" -> "Encontre algo para assistir"
-            else -> "Entre no seu próximo universo"
-        }, 30, WHITE, true).apply { setPadding(d(0), d(10), d(0), d(8)) })
-        hero.addView(label("A experiência CineHUB está sendo preparada para sua TV.", 16, MUTED, false))
+        hero.addView(label("Seu próximo universo começa aqui", 30, WHITE, true).apply {
+            setPadding(d(0), d(10), d(0), d(8))
+        })
+        hero.addView(label("Filmes, séries, animes e doramas com informações e capas online.", 16, MUTED, false))
         content.addView(hero, LinearLayout.LayoutParams(-1, d(210)))
-
-        content.addView(label(if (section == "Início") "Continue assistindo" else section, 22, WHITE, true).apply {
+        content.addView(label("Explore o CineHUB", 22, WHITE, true).apply {
             setPadding(d(2), d(24), d(0), d(12))
         })
-        val rowScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf("Destaque CineHUB", "Filmes", "Séries", "Animes", "Doramas").forEachIndexed { i, name ->
+        listOf("Filmes", "Séries", "Animes", "Doramas").forEach { name ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.BOTTOM
                 setPadding(d(16), d(12), d(16), d(16))
                 isFocusable = true
                 isFocusableInTouchMode = true
-                background = focusBackground(if (i == 0) 0xFF351015.toInt() else PANEL)
-                addView(label("CINEHUB", 11, RED, true))
-                addView(label(name, 18, WHITE, true).apply { setPadding(d(0), d(8), d(0), d(0)) })
-                addView(label("Conteúdo de demonstração", 12, MUTED, false).apply { setPadding(d(0), d(5), d(0), d(0)) })
+                background = focusBackground(PANEL)
+                addView(label("CINEHUB ONLINE", 11, RED, true))
+                addView(label(name, 20, WHITE, true).apply { setPadding(d(0), d(8), d(0), d(0)) })
+                addView(label("Ver catálogo", 12, MUTED, false).apply { setPadding(d(0), d(5), d(0), d(0)) })
+                setOnClickListener { showSection(name) }
             }
-            val params = LinearLayout.LayoutParams(d(240), d(132))
-            params.marginEnd = d(14)
-            row.addView(card, params)
+            row.addView(card, LinearLayout.LayoutParams(d(220), d(122)).apply { marginEnd = d(14) })
         }
-        rowScroll.addView(row)
-        content.addView(rowScroll, LinearLayout.LayoutParams(-1, d(142)))
-        content.addView(label("Fundação 0.2.0  •  Interface nativa em construção", 12, MUTED, false).apply {
+        scroll.addView(row)
+        content.addView(scroll, LinearLayout.LayoutParams(-1, d(132)))
+        content.addView(label("Os títulos, capas e sinopses são consultados online pelo Supabase.", 13, MUTED, false).apply {
             setPadding(d(2), d(22), d(0), d(0))
         })
+    }
+
+    private fun showMediaSection(section: String) {
+        content.removeAllViews()
+        val headline = when (section) {
+            "Filmes" -> "Qual é o filme de hoje?"
+            "Séries" -> "Sua próxima maratona começa aqui"
+            "Animes" -> "Entre em um novo mundo"
+            else -> "Histórias para acompanhar"
+        }
+        content.addView(label(section.uppercase(), 12, RED, true).apply { setPadding(d(0), d(8), d(0), d(4)) })
+        content.addView(label(headline, 28, WHITE, true).apply { setPadding(d(0), d(0), d(0), d(8)) })
+        content.addView(label(when (section) {
+            "Filmes" -> "Lançamentos, tendências e informações atualizadas online."
+            "Séries" -> "Descubra séries e encontre informações, capas e sinopses."
+            "Animes" -> "Animações e produções japonesas encontradas no catálogo online."
+            else -> "Dramas coreanos e outras produções coreanas disponíveis no catálogo."
+        }, 14, MUTED, false).apply { setPadding(d(0), d(0), d(0), d(14)) })
+
+        val searchLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val search = EditText(this).apply {
+            hint = when (section) {
+                "Filmes" -> "Buscar filme…"
+                "Séries" -> "Buscar série…"
+                "Animes" -> "Buscar anime…"
+                else -> "Buscar dorama…"
+            }
+            setSingleLine(true)
+            textSize = 15f
+            setTextColor(WHITE)
+            setHintTextColor(MUTED)
+            setPadding(d(16), d(8), d(16), d(8))
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        searchLine.addView(search, LinearLayout.LayoutParams(0, d(50), 1f))
+        val searchButton = label("BUSCAR", 13, WHITE, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(d(18), d(12), d(18), d(12))
+            background = focusBackground(RED)
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        searchLine.addView(searchButton, LinearLayout.LayoutParams(-2, d(50)).apply { marginStart = d(10) })
+        content.addView(searchLine)
+        val status = label("Conectando ao catálogo online…", 14, MUTED, false).apply {
+            setPadding(d(2), d(14), d(0), d(10))
+        }
+        content.addView(status)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(results)
+
+        fun runSearch(query: String) {
+            status.text = if (query.isBlank()) "Atualizando catálogo online…" else "Buscando “$query”…"
+            searchButton.isEnabled = false
+            io.execute {
+                try {
+                    val items = if (query.isBlank()) OnlineCatalogRepository.feed(section)
+                        else OnlineCatalogRepository.search(query, section)
+                    runOnUiThread {
+                        if (currentSection != section) return@runOnUiThread
+                        status.text = if (items.isEmpty()) {
+                            if (query.isBlank()) "Nenhum título encontrado nesta área. Tente buscar pelo nome."
+                            else "Nenhum resultado encontrado para “$query”."
+                        } else "${items.size} títulos encontrados"
+                        searchButton.isEnabled = true
+                        renderMediaCards(items, results)
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread {
+                        if (currentSection != section) return@runOnUiThread
+                        status.text = "Não foi possível conectar ao catálogo online. Tente novamente."
+                        searchButton.isEnabled = true
+                    }
+                }
+            }
+        }
+        searchButton.setOnClickListener { runSearch(search.text.toString()) }
+        search.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) { runSearch(search.text.toString()); true } else false
+        }
+        runSearch("")
+    }
+
+    private fun renderMediaCards(items: List<MediaItem>, container: LinearLayout) {
+        container.removeAllViews()
+        if (items.isEmpty()) {
+            container.addView(label("Quando o catálogo responder, os títulos aparecerão aqui com suas capas.", 14, MUTED, false).apply {
+                setPadding(d(2), d(12), d(0), d(18))
+            })
+            return
+        }
+        container.addView(label(if (currentSection == "Filmes") "Em destaque" else "Descobertas para você", 20, WHITE, true).apply {
+            setPadding(d(0), d(10), d(0), d(8))
+        })
+        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        items.take(24).forEach { item ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = focusBackground(PANEL)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                val poster = ImageView(this@MainActivity).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    contentDescription = "Capa de ${item.title}"
+                    setBackgroundColor(0xFF242424.toInt())
+                    item.poster?.let { url -> load(url) {
+                        crossfade(true)
+                        placeholder(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
+                        error(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
+                    } }
+                }
+                addView(poster, LinearLayout.LayoutParams(-1, d(190)))
+                addView(label(item.title, 14, WHITE, true).apply { maxLines = 2; setPadding(d(8), d(8), d(8), d(2)) })
+                val meta = listOf(item.year, if (item.rating != "—") "★ ${item.rating}" else "").filter { it.isNotBlank() }.joinToString("  •  ")
+                addView(label(meta.ifBlank { "Catálogo online" }, 11, MUTED, false).apply { setPadding(d(8), d(2), d(8), d(8)) })
+                setOnClickListener {
+                    val synopsis = item.description.ifBlank { "A sinopse ainda não está disponível." }
+                    androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle(item.title)
+                        .setMessage("${if (item.year.isNotBlank()) item.year + "  •  " else ""}Nota: ${item.rating}\\n\\n$synopsis\\n\\nInformações e capa online. A reprodução deste título será conectada na próxima etapa.")
+                        .setPositiveButton("Fechar", null)
+                        .show()
+                }
+            }
+            row.addView(card, LinearLayout.LayoutParams(d(150), d(258)).apply { marginEnd = d(12) })
+        }
+        scroll.addView(row)
+        container.addView(scroll, LinearLayout.LayoutParams(-1, d(266)))
     }
 
     private fun showMyList() {
