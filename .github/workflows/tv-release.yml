@@ -61,6 +61,7 @@ jobs:
           PY
           grep -q 'versionCode = 129' android/CineHUB-TV/build.gradle.kts
           grep -q 'versionName = "1.2.9"' android/CineHUB-TV/build.gradle.kts
+grep -q 'versionCode = 129' android/CineHUB-TV/build.gradle.kts
 
       - name: Decode official signing key
         env:
@@ -103,7 +104,7 @@ jobs:
           data = {
             "app": "CineHUB TV",
             "version": "1.2.9",
-            "versionCode": 128,
+            "versionCode": 129,
             "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.9",
             "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.9/CineHUB-TV-v1.2.9.apk",
             "sha256": sha,
