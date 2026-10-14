@@ -144,37 +144,173 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showHomeLanding() {
+        mainHandler.removeCallbacks(homeHeroTick)
+        content.removeAllViews()
+
         val hero = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.BOTTOM
-            setPadding(d(28), d(24), d(28), d(24))
-            background = focusBackground(0xFF241012.toInt())
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF351016.toInt(), 0xFF111111.toInt())
+            ).apply { cornerRadius = d(14).toFloat(); setStroke(d(1), 0xFF4A252A.toInt()) }
+            clipToOutline = true
+            isFocusable = true
+            isFocusableInTouchMode = true
         }
-        hero.addView(label("CINEHUB TV  •  SUA CENTRAL DE FILMES", 13, RED, true))
-        hero.addView(label("Seu próximo universo começa aqui", 30, WHITE, true).apply {
-            setPadding(d(0), d(10), d(0), d(8))
+        val posterFrame = android.widget.FrameLayout(this).apply { setBackgroundColor(0xFF202020.toInt()) }
+        homeHeroPoster = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "Capa do lançamento em destaque"
+        }
+        posterFrame.addView(homeHeroPoster, android.widget.FrameLayout.LayoutParams(-1, -1))
+        hero.addView(posterFrame, LinearLayout.LayoutParams(d(154), d(178)))
+
+        val info = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(d(20), d(10), d(18), d(10))
+        }
+        info.addView(label("CINEHUB TV  •  LANÇAMENTOS", 11, RED, true))
+        homeHeroTitle = label("Lançamentos e tendências", 23, WHITE, true).apply {
+            setPadding(0, d(6), 0, d(4)); maxLines = 2
+        }
+        info.addView(homeHeroTitle!!)
+        homeHeroMeta = label("FILMES  •  SÉRIES  •  NOVIDADES", 12, MUTED, true)
+        info.addView(homeHeroMeta!!)
+        homeHeroDescription = label("Capas, sinopses e informações atualizadas do catálogo online.", 13, WHITE, false).apply {
+            setPadding(0, d(7), 0, 0); maxLines = 3
+        }
+        info.addView(homeHeroDescription!!)
+        hero.addView(info, LinearLayout.LayoutParams(0, -1, 1f))
+        hero.setOnClickListener { homeHeroItems.getOrNull(homeHeroIndex)?.let { showMediaDetails(it) } }
+        content.addView(hero, LinearLayout.LayoutParams(-1, d(178)))
+
+        val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+        val recentChannelName = prefs.getString("continue_channel_name", null)
+        if (!recentChannelName.isNullOrBlank()) {
+            content.addView(label("Continuar assistindo", 20, WHITE, true).apply {
+                setPadding(d(2), d(14), 0, d(7))
+            })
+            val recent = label("▶   $recentChannelName     •     Retomar canal", 15, WHITE, true).apply {
+                setPadding(d(16), d(12), d(16), d(12))
+                background = focusBackground(PANEL)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                setOnClickListener {
+                    val channel = (channels + readSavedFavoriteChannels()).firstOrNull { it.name == recentChannelName }
+                    if (channel != null && channel.sources.isNotEmpty()) {
+                        startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                            putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(channel.sources))
+                            putExtra(PlayerActivity.EXTRA_URL, channel.primarySource)
+                            putExtra(PlayerActivity.EXTRA_TITLE, channel.name)
+                        })
+                    } else {
+                        showInfo("Continuar assistindo", "O canal salvo no histórico não está disponível na lista carregada.")
+                    }
+                }
+            }
+            content.addView(recent, LinearLayout.LayoutParams(-1, d(56)))
+        }
+
+        content.addView(label("Explore o CineHUB", 21, WHITE, true).apply {
+            setPadding(d(2), d(16), 0, d(7))
         })
-        hero.addView(label("Filmes, séries, animes e doramas com informações e capas online.", 16, MUTED, false))
-        content.addView(hero, LinearLayout.LayoutParams(-1, d(210)))
-        content.addView(label("Explore o CineHUB", 22, WHITE, true).apply { setPadding(d(2), d(20), d(0), d(8)) })
-        val grid = android.widget.GridLayout(this).apply { columnCount = 3; rowCount = 2; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
+        val grid = android.widget.GridLayout(this).apply {
+            columnCount = 3
+            rowCount = 2
+            alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
+        }
         listOf("Filmes", "Séries", "Doramas", "Animes", "Rádio", "Ao vivo").forEachIndexed { index, name ->
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
-                setPadding(d(16), d(10), d(16), d(10)); background = focusBackground(PANEL)
-                isFocusable = true; isFocusableInTouchMode = true
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(d(15), d(9), d(12), d(9))
+                background = focusBackground(PANEL)
+                isFocusable = true
+                isFocusableInTouchMode = true
                 addView(label("CINEHUB", 10, RED, true))
-                addView(label(name, 19, WHITE, true).apply { setPadding(0, d(5), 0, d(3)) })
-                addView(label(if (name == "Ao vivo") "Canais e programação" else if (name == "Rádio") "Estações online" else "Ver catálogo", 12, MUTED, false))
+                addView(label(name, 18, WHITE, true).apply { setPadding(0, d(4), 0, d(2)) })
+                addView(label(
+                    if (name == "Ao vivo") "Canais e programação"
+                    else if (name == "Rádio") "Estações online"
+                    else "Ver catálogo online", 12, MUTED, false
+                ))
                 setOnClickListener { showSection(name) }
             }
-            val lp = android.widget.GridLayout.LayoutParams().apply { width = 0; height = d(96); columnSpec = android.widget.GridLayout.spec(index % 3, 1f); rowSpec = android.widget.GridLayout.spec(index / 3); setMargins(d(5), d(5), d(5), d(5)) }
+            val lp = android.widget.GridLayout.LayoutParams().apply {
+                width = 0
+                height = d(88)
+                columnSpec = android.widget.GridLayout.spec(index % 3, 1f)
+                rowSpec = android.widget.GridLayout.spec(index / 3)
+                setMargins(d(4), d(4), d(4), d(4))
+            }
             grid.addView(card, lp)
         }
-        content.addView(grid, LinearLayout.LayoutParams(-1, d(216)))
-        content.addView(label("Os títulos, capas e sinopses são consultados online pelo Supabase.", 13, MUTED, false).apply {
-            setPadding(d(2), d(22), d(0), d(0))
-        })
+        content.addView(grid, LinearLayout.LayoutParams(-1, d(200)))
+
+        io.execute {
+            try {
+                val items = (OnlineCatalogRepository.feed("Filmes") +
+                    OnlineCatalogRepository.feed("Séries"))
+                    .filter { !it.poster.isNullOrBlank() }
+                    .distinctBy { it.id }
+                    .take(12)
+                runOnUiThread {
+                    if (currentSection != "Início" || items.isEmpty()) return@runOnUiThread
+                    homeHeroItems = items
+                    homeHeroIndex = 0
+                    bindHomeHero(items[0])
+                    mainHandler.removeCallbacks(homeHeroTick)
+                    mainHandler.postDelayed(homeHeroTick, 8_000L)
+                }
+            } catch (_: Exception) {
+                runOnUiThread {
+                    if (currentSection == "Início") {
+                        homeHeroTitle?.text = "Seu próximo universo começa aqui"
+                        homeHeroMeta?.text = "FILMES  •  SÉRIES  •  NOVIDADES"
+                        homeHeroDescription?.text = "O catálogo online não respondeu. Tente novamente mais tarde."
+                    }
+                }
+            }
+        }
+    }
+
+    private var homeHeroPoster: ImageView? = null
+    private var homeHeroTitle: TextView? = null
+    private var homeHeroMeta: TextView? = null
+    private var homeHeroDescription: TextView? = null
+    private var homeHeroItems: List<MediaItem> = emptyList()
+    private var homeHeroIndex = 0
+    private val homeHeroTick = object : Runnable {
+        override fun run() {
+            if (currentSection == "Início" && homeHeroItems.isNotEmpty()) {
+                homeHeroIndex = (homeHeroIndex + 1) % homeHeroItems.size
+                bindHomeHero(homeHeroItems[homeHeroIndex])
+                mainHandler.postDelayed(this, 8_000L)
+            }
+        }
+    }
+
+    private fun bindHomeHero(item: MediaItem) {
+        homeHeroTitle?.text = item.title
+        homeHeroMeta?.text = listOf(
+            item.year,
+            if (item.rating != "—") "★ ${item.rating}" else "",
+            if (item.type == "movie") "FILME" else "SÉRIE"
+        ).filter { it.isNotBlank() }.joinToString("   •   ")
+        homeHeroDescription?.text = item.description.ifBlank {
+            "Confira as informações deste título no catálogo CineHUB."
+        }
+        val image = homeHeroPoster
+        val url = item.backdrop ?: item.poster
+        if (image != null && !url.isNullOrBlank()) {
+            image.load(url) {
+                crossfade(true)
+                placeholder(android.graphics.drawable.ColorDrawable(0xFF202020.toInt()))
+                error(android.graphics.drawable.ColorDrawable(0xFF202020.toInt()))
+            }
+        }
     }
 
     private fun showMediaSection(section: String) {
@@ -854,6 +990,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(clockTick)
+        mainHandler.removeCallbacks(homeHeroTick)
         io.shutdownNow()
         super.onDestroy()
     }
