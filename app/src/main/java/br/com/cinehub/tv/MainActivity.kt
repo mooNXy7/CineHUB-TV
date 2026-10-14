@@ -9,6 +9,10 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.widget.EditText
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.inputmethod.EditorInfo
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -138,39 +142,85 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLiveChannels() {
         content.removeAllViews()
-        content.addView(label("Canais ao vivo", 26, WHITE, true).apply { setPadding(0, 12, 0, 8) })
-        val status = label("Carregando catálogo público…", 15, MUTED, false)
+        content.addView(label("Canais ao vivo", 26, WHITE, true).apply {
+            setPadding(0, 12, 0, 8)
+        })
+        content.addView(label("Pesquise por nome ou categoria. Se um canal tiver mais de uma fonte, o player tentará alternativas quando necessário.", 14, MUTED, false).apply {
+            setPadding(0, 0, 0, 14)
+        })
+        val search = EditText(this).apply {
+            hint = "Buscar canal…"
+            setSingleLine(true)
+            textSize = 16f
+            setTextColor(WHITE)
+            setHintTextColor(MUTED)
+            setPadding(18, 10, 18, 10)
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        content.addView(search, LinearLayout.LayoutParams(-1, 54))
+        val status = label("Carregando catálogo público…", 14, MUTED, false).apply {
+            setPadding(2, 12, 0, 12)
+        }
         content.addView(status)
+        val rowsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(rowsContainer)
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (channels.isNotEmpty()) renderChannelRows(channels, rowsContainer, status, s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
         if (channels.isNotEmpty()) {
-            renderChannelRows(channels, status)
+            renderChannelRows(channels, rowsContainer, status, search.text.toString())
             return
         }
+        status.text = "Conectando ao catálogo de canais…"
         io.execute {
             try {
                 val loaded = CatalogRepository.loadChannels()
                 runOnUiThread {
                     channels = loaded
-                    renderChannelRows(loaded, status)
+                    renderChannelRows(loaded, rowsContainer, status, search.text.toString())
                 }
             } catch (e: Exception) {
                 runOnUiThread {
-                    status.text = "Não foi possível carregar o catálogo agora. Verifique a conexão e tente novamente."
+                    status.text = "Não foi possível carregar o catálogo. Confira a internet e tente novamente."
                 }
             }
         }
     }
 
-    private fun renderChannelRows(items: List<TvChannel>, status: TextView) {
-        content.removeView(status)
-        content.addView(label("${items.size} canais encontrados", 14, MUTED, false).apply {
-            setPadding(0, 0, 0, 12)
-        })
-        val categories = items.groupBy { it.category }
-        categories.toSortedMap().forEach { (category, list) ->
-            content.addView(label(category, 19, WHITE, true).apply { setPadding(0, 16, 0, 8) })
+    private fun renderChannelRows(
+        items: List<TvChannel>,
+        rowsContainer: LinearLayout,
+        status: TextView,
+        query: String
+    ) {
+        rowsContainer.removeAllViews()
+        val term = query.trim().lowercase()
+        val filtered = if (term.isBlank()) items else items.filter {
+            it.name.lowercase().contains(term) || it.category.lowercase().contains(term)
+        }
+        status.text = if (term.isBlank()) {
+            "${filtered.size} canais disponíveis"
+        } else {
+            "${filtered.size} resultado(s) para “${query.trim()}”"
+        }
+        if (filtered.isEmpty()) {
+            rowsContainer.addView(label("Nenhum canal encontrado. Tente outro nome ou categoria.", 16, MUTED, false).apply {
+                setPadding(2, 22, 0, 22)
+            })
+            return
+        }
+        filtered.groupBy { it.category }.toSortedMap().forEach { (category, list) ->
+            rowsContainer.addView(label(category, 19, WHITE, true).apply { setPadding(0, 14, 0, 8) })
             val rowScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            list.take(30).forEach { channel ->
+            list.forEach { channel ->
                 val card = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_VERTICAL
@@ -180,7 +230,13 @@ class MainActivity : AppCompatActivity() {
                     isFocusableInTouchMode = true
                     addView(label("AO VIVO", 10, RED, true))
                     addView(label(channel.name, 16, WHITE, true).apply { setPadding(0, 6, 0, 0) })
-                    addView(label("${channel.sources.size} fonte(s)", 12, MUTED, false).apply { setPadding(0, 4, 0, 0) })
+                    addView(label(
+                        when (channel.sources.size) {
+                            0 -> "Sem fonte"
+                            1 -> "1 fonte disponível"
+                            else -> "${channel.sources.size} fontes disponíveis"
+                        }, 12, MUTED, false
+                    ).apply { setPadding(0, 4, 0, 0) })
                     setOnClickListener {
                         if (channel.sources.isEmpty()) {
                             status.text = "Este canal não possui uma fonte disponível."
@@ -198,7 +254,7 @@ class MainActivity : AppCompatActivity() {
                 row.addView(card, lp)
             }
             rowScroll.addView(row)
-            content.addView(rowScroll, LinearLayout.LayoutParams(-1, 110))
+            rowsContainer.addView(rowScroll, LinearLayout.LayoutParams(-1, 110))
         }
     }
 
