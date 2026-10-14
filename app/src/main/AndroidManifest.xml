@@ -7,6 +7,8 @@
     <application
         android:allowBackup="false"
         android:label="CineHUB TV"
+        android:icon="@drawable/ic_cinehub"
+        android:roundIcon="@drawable/ic_cinehub"
         android:theme="@style/Theme.CineHUB"
         android:usesCleartextTraffic="true">
         <activity
