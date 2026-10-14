@@ -22,7 +22,7 @@ import java.util.concurrent.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final String UPDATE_URL="https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json";
-    private static final int CURRENT_VERSION_CODE=126;
+    private static final int CURRENT_VERSION_CODE=127;
     private final ExecutorService updateExecutor=Executors.newSingleThreadExecutor();
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private long pendingDownloadId=-1;
@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private void configureWebView(){
         WebSettings s=webView.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setDatabaseEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(true);s.setAllowContentAccess(true);s.setAllowFileAccessFromFileURLs(false);s.setAllowUniversalAccessFromFileURLs(false);s.setSupportZoom(false);s.setBuiltInZoomControls(false);s.setDisplayZoomControls(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);s.setUserAgentString(s.getUserAgentString()+" CineHUB-TV/1.2.6");
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);s.setUserAgentString(s.getUserAgentString()+" CineHUB-TV/1.2.7");
         if(WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK))WebSettingsCompat.setForceDark(s,WebSettingsCompat.FORCE_DARK_OFF);
         webView.setBackgroundColor(Color.BLACK);webView.setFocusable(true);webView.requestFocus();if(Build.VERSION.SDK_INT>=26)webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,true);
         webView.setWebViewClient(new WebViewClient(){

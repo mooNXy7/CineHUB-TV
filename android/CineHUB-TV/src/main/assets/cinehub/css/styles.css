@@ -140,7 +140,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 }
 
 
-/* CineHUB TV 1.2.6 — interface focada em televisores 16:9 e controle remoto */
+/* CineHUB TV 1.2.7 — interface focada em televisores 16:9 e controle remoto */
 @media (min-width: 1100px) {
   :root { --safe-x: clamp(28px, 2.6vw, 54px); }
   body { min-width: 1100px; overflow-x: hidden; }
