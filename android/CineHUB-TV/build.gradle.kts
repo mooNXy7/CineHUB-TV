@@ -9,8 +9,8 @@ android {
         applicationId = "com.cinehub.tv"
         minSdk = 23
         targetSdk = 35
-        versionCode = 127
-        versionName = "1.2.7"
+        versionCode = 128
+        versionName = "1.2.8"
     }
 
     signingConfigs {
