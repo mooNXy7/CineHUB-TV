@@ -15,20 +15,23 @@ Estimativa de planejamento: **28% da reconstrução completa**. A base técnica 
 - [x] Player recebe fontes alternativas e tenta a próxima quando uma falha.
 - [x] Correção do botão Voltar aplicada.
 - [x] Build de depuração concluído com sucesso no GitHub Actions.
+- [x] Pesquisa por nome/categoria na seção Ao vivo e tela Buscar conectada ao catálogo de canais.
+- [x] Logos dos canais com carregamento assíncrono e fallback visual.
+- [x] Mensagens de carregamento/erro e atualização manual do catálogo em Ajustes.
+- [x] Ícone vetorial nativo e tela inicial escura com a marca CineHUB adicionados; build confirmado no commit atual. Os PNGs oficiais ainda precisam ser integrados.
 
-## Em andamento / próximo ciclo\n\n- [x] Build confirmado após pesquisa global, favoritos, carregamento de logos e fallback visual.
+## Em andamento / próximo ciclo
 
-- [x] Adicionar ícone vetorial nativo e tela inicial escura com a marca CineHUB (os arquivos oficiais PNG ainda precisam ser integrados).
 - [ ] Refinar foco, tamanhos e navegação por controle remoto em telas de TV.
-- [x] Implementar pesquisa por nome/categoria na seção Ao vivo e conectar a tela Buscar ao catálogo de canais.
-- [x] Exibir logos dos canais com carregamento assíncrono e fallback visual.
-- [x] Melhorar mensagens de carregamento/erro e adicionar atualização manual do catálogo em Ajustes.
+- [ ] Melhorar consistência visual entre as seções nativas.
+- [ ] Confirmar se o fluxo de inicialização e a tela inicial se comportam bem em dispositivos reais.
 
 ## Ainda falta
 
 - [ ] Integrar catálogo real de filmes e séries com capas, sinopses e metadados.
 - [ ] Separar temporadas e episódios para séries/animes/doramas.
-- [x] Implementar Minha Lista com favoritos de canais persistidos localmente.\n- [ ] Implementar histórico real de Continue Assistindo.
+- [x] Implementar Minha Lista com favoritos de canais persistidos localmente.
+- [ ] Implementar histórico real de Continue Assistindo.
 - [ ] Integrar rádios e guia de programação/EPG.
 - [ ] Validar reprodução real em diferentes fontes e formatos.
 - [ ] Testar instalação, controle remoto, suspensão/retomada e desempenho em Android TV/TV Box físico.
