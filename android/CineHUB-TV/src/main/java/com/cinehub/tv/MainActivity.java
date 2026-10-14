@@ -22,7 +22,7 @@ import java.util.concurrent.*;
 
 public class MainActivity extends AppCompatActivity {
     private static final String UPDATE_URL="https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json";
-    private static final int CURRENT_VERSION_CODE=128;
+    private static final int CURRENT_VERSION_CODE=129;
     private final ExecutorService updateExecutor=Executors.newSingleThreadExecutor();
     private final Handler mainHandler=new Handler(Looper.getMainLooper());
     private long pendingDownloadId=-1;
@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
     private void configureWebView(){
         WebSettings s=webView.getSettings();s.setJavaScriptEnabled(true);s.setDomStorageEnabled(true);s.setDatabaseEnabled(true);s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(true);s.setAllowContentAccess(true);s.setAllowFileAccessFromFileURLs(false);s.setAllowUniversalAccessFromFileURLs(false);s.setSupportZoom(false);s.setBuiltInZoomControls(false);s.setDisplayZoomControls(false);
-        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);s.setUserAgentString(s.getUserAgentString()+" CineHUB-TV/1.2.8");
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);s.setUserAgentString(s.getUserAgentString()+" CineHUB-TV/1.2.9");
         if(WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK))WebSettingsCompat.setForceDark(s,WebSettingsCompat.FORCE_DARK_OFF);
         webView.setBackgroundColor(Color.BLACK);webView.setFocusable(true);webView.requestFocus();if(Build.VERSION.SDK_INT>=26)webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT,true);
         webView.setWebViewClient(new WebViewClient(){
@@ -62,7 +62,7 @@ public class MainActivity extends AppCompatActivity {
     private void enqueueDownload(String u,String ua,String mime){try{DownloadManager.Request r=new DownloadManager.Request(Uri.parse(u));r.setTitle("CineHUB TV");r.setDescription("Download iniciado");if(mime!=null)r.setMimeType(mime);if(ua!=null)r.addRequestHeader("User-Agent",ua);r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);r.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,"CineHUB-"+System.currentTimeMillis());((DownloadManager)getSystemService(DOWNLOAD_SERVICE)).enqueue(r);Toast.makeText(this,"Download iniciado",Toast.LENGTH_SHORT).show();}catch(Exception e){Toast.makeText(this,"Não foi possível iniciar o download",Toast.LENGTH_SHORT).show();}}
     private void enterFullscreen(View v,WebChromeClient.CustomViewCallback c){if(fullscreenView!=null){c.onCustomViewHidden();return;}fullscreenView=v;fullscreenCallback=c;webView.setVisibility(View.GONE);((ViewGroup)findViewById(R.id.root)).addView(v,new ViewGroup.LayoutParams(-1,-1));hideSystemUi();}
     private void exitFullscreen(){if(fullscreenView==null)return;((ViewGroup)findViewById(R.id.root)).removeView(fullscreenView);fullscreenView=null;if(fullscreenCallback!=null){fullscreenCallback.onCustomViewHidden();fullscreenCallback=null;}webView.setVisibility(View.VISIBLE);webView.requestFocus();showSystemUi();}
-    private void hideSystemUi(){getWindow().getDecorView().setSystemUiVisibility(5894);}private void showSystemUi(){getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);}
+    private void hideSystemUi(){TvWindowController.enterImmersiveMode(this);}private void showSystemUi(){TvWindowController.showSystemBars(this);}
     @Override public boolean dispatchKeyEvent(KeyEvent e){if(e.getAction()==KeyEvent.ACTION_DOWN&&e.getKeyCode()==KeyEvent.KEYCODE_BACK){handleBack();return true;}return super.dispatchKeyEvent(e);}
     @Override public void onBackPressed(){handleBack();}
     private void handleBack(){if(fullscreenView!=null){exitFullscreen();return;}if(webView==null){super.onBackPressed();return;}webView.evaluateJavascript("(function(){try{return !!(window.CineHUBTV&&window.CineHUBTV.back&&window.CineHUBTV.back());}catch(e){return false;}})();",v->{if("false".equals(v))MainActivity.super.onBackPressed();});}
