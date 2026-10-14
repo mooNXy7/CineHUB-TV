@@ -89,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         currentSection = section
         content.removeAllViews()
         if (section == "Ao vivo") { showLiveChannels(); return }
+        if (section == "Buscar") { showCatalogSearch(); return }
         if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -138,6 +139,57 @@ class MainActivity : AppCompatActivity() {
         content.removeAllViews()
         content.addView(label(title, 26, WHITE, true).apply { setPadding(0, 18, 0, 12) })
         content.addView(label(message, 16, MUTED, false))
+    }
+
+    private fun showCatalogSearch() {
+        content.removeAllViews()
+        content.addView(label("Buscar no CineHUB", 26, WHITE, true).apply {
+            setPadding(0, 12, 0, 8)
+        })
+        content.addView(label("Pesquise no catálogo conectado. Nesta etapa, os resultados disponíveis são canais ao vivo; filmes e séries serão conectados às suas fontes nas próximas fases.", 14, MUTED, false).apply {
+            setPadding(0, 0, 0, 14)
+        })
+        val search = EditText(this).apply {
+            hint = "Digite nome do canal ou categoria…"
+            setSingleLine(true)
+            textSize = 16f
+            setTextColor(WHITE)
+            setHintTextColor(MUTED)
+            setPadding(18, 10, 18, 10)
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        content.addView(search, LinearLayout.LayoutParams(-1, 54))
+        val status = label("Preparando pesquisa…", 14, MUTED, false).apply {
+            setPadding(2, 12, 0, 12)
+        }
+        content.addView(status)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(results)
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (channels.isNotEmpty()) renderChannelRows(channels, results, status, s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        if (channels.isNotEmpty()) {
+            renderChannelRows(channels, results, status, search.text.toString())
+            return
+        }
+        io.execute {
+            try {
+                val loaded = CatalogRepository.loadChannels()
+                runOnUiThread {
+                    channels = loaded
+                    renderChannelRows(loaded, results, status, search.text.toString())
+                }
+            } catch (e: Exception) {
+                runOnUiThread { status.text = "Falha ao acessar o catálogo. Verifique a conexão e tente novamente." }
+            }
+        }
     }
 
     private fun showLiveChannels() {
