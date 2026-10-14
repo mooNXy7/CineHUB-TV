@@ -59,7 +59,7 @@ jobs:
           p.write_text(s, encoding="utf-8")
           Path("android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt").write_text("1.2.9\n", encoding="utf-8")
           PY
-          grep -q 'versionCode = 128' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionCode = 129' android/CineHUB-TV/build.gradle.kts
           grep -q 'versionName = "1.2.9"' android/CineHUB-TV/build.gradle.kts
 
       - name: Decode official signing key
