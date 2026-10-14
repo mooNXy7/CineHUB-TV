@@ -16,6 +16,9 @@ import androidx.media3.ui.PlayerView
 class PlayerActivity : AppCompatActivity() {
     private var player: ExoPlayer? = null
     private lateinit var status: TextView
+    private var sources: List<String> = emptyList()
+    private var sourceIndex = 0
+    private var channelTitle = "CineHUB TV"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,8 +26,13 @@ class PlayerActivity : AppCompatActivity() {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
-        val url = intent.getStringExtra(EXTRA_URL)
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "CineHUB TV"
+        channelTitle = intent.getStringExtra(EXTRA_TITLE) ?: "CineHUB TV"
+        val suppliedSources = intent.getStringArrayListExtra(EXTRA_SOURCES)?.toList().orEmpty()
+        val legacyUrl = intent.getStringExtra(EXTRA_URL)
+        sources = (suppliedSources + listOfNotNull(legacyUrl))
+            .filter { it.startsWith("https://") || it.startsWith("http://") }
+            .distinct()
+
         val frame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         val video = PlayerView(this).apply {
             useController = true
@@ -42,25 +50,41 @@ class PlayerActivity : AppCompatActivity() {
         frame.addView(status, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         setContentView(frame)
 
-        if (url.isNullOrBlank() || !(url.startsWith("https://") || url.startsWith("http://"))) {
-            status.text = "Endereço de reprodução inválido"
+        if (sources.isEmpty()) {
+            status.text = "Este canal não possui uma fonte válida."
             return
         }
 
         player = ExoPlayer.Builder(this).build().also { exo ->
             video.player = exo
-            exo.setMediaItem(MediaItem.fromUri(url))
             exo.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    status.visibility = if (playbackState == Player.STATE_READY) View.GONE else View.VISIBLE
-                    if (playbackState == Player.STATE_BUFFERING) status.text = "Carregando: $title"
-                    if (playbackState == Player.STATE_ENDED) status.text = "Transmissão encerrada"
+                    if (playbackState == Player.STATE_READY) {
+                        status.visibility = View.GONE
+                    } else if (playbackState == Player.STATE_BUFFERING) {
+                        status.text = "Carregando " + channelTitle + "…"
+                        status.visibility = View.VISIBLE
+                    } else if (playbackState == Player.STATE_ENDED) {
+                        status.text = "Transmissão encerrada"
+                        status.visibility = View.VISIBLE
+                    }
                 }
+
                 override fun onPlayerError(error: PlaybackException) {
-                    status.visibility = View.VISIBLE
-                    status.text = "Não foi possível reproduzir esta fonte. Tente outra fonte do canal."
+                    sourceIndex++
+                    if (sourceIndex < sources.size) {
+                        status.text = "A fonte falhou. Tentando alternativa " + (sourceIndex + 1) + "/" + sources.size + "…"
+                        status.visibility = View.VISIBLE
+                        exo.setMediaItem(MediaItem.fromUri(sources[sourceIndex]))
+                        exo.prepare()
+                        exo.playWhenReady = true
+                    } else {
+                        status.text = "Não foi possível reproduzir este canal. As fontes disponíveis falharam."
+                        status.visibility = View.VISIBLE
+                    }
                 }
             })
+            exo.setMediaItem(MediaItem.fromUri(sources[sourceIndex]))
             exo.prepare()
             exo.playWhenReady = true
         }
@@ -74,6 +98,7 @@ class PlayerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_URL = "br.com.cinehub.tv.STREAM_URL"
+        const val EXTRA_SOURCES = "br.com.cinehub.tv.STREAM_SOURCES"
         const val EXTRA_TITLE = "br.com.cinehub.tv.STREAM_TITLE"
     }
 }
