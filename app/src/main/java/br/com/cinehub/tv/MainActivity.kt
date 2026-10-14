@@ -9,7 +9,6 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.view.ViewGroup
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -32,9 +31,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         buildHome()
     }
 
@@ -48,10 +46,8 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val brand = label("Cine", 28, WHITE, true)
-        val hub = label("HUB", 28, RED, true)
-        header.addView(brand)
-        header.addView(hub)
+        header.addView(label("Cine", 28, WHITE, true))
+        header.addView(label("HUB", 28, RED, true))
         val spacer = View(this)
         header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
         header.addView(label("BR  •  TV", 14, MUTED, false))
@@ -87,7 +83,7 @@ class MainActivity : AppCompatActivity() {
     private fun showSection(section: String) {
         content.removeAllViews()
         if (section == "Ao vivo") { showLiveChannels(); return }
-        if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa.") ; return }
+        if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.BOTTOM
@@ -96,10 +92,8 @@ class MainActivity : AppCompatActivity() {
         }
         hero.addView(label("CINEHUB TV  •  SUA CENTRAL DE FILMES", 13, RED, true))
         hero.addView(label(when (section) {
-            "Ao vivo" -> "O que está passando agora?"
             "Filmes" -> "Qual é o filme de hoje?"
             "Séries" -> "Sua próxima maratona começa aqui"
-            "Rádio" -> "Sua trilha sonora"
             "Buscar" -> "Encontre algo para assistir"
             else -> "Entre no seu próximo universo"
         }, 30, WHITE, true).apply { setPadding(0, 10, 0, 8) })
@@ -116,7 +110,6 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.BOTTOM
                 setPadding(16, 12, 16, 16)
-                setBackgroundColor(if (i == 0) 0xFF351015.toInt() else PANEL)
                 isFocusable = true
                 isFocusableInTouchMode = true
                 background = focusBackground(if (i == 0) 0xFF351015.toInt() else PANEL)
@@ -130,7 +123,7 @@ class MainActivity : AppCompatActivity() {
         }
         rowScroll.addView(row)
         content.addView(rowScroll, LinearLayout.LayoutParams(-1, 142))
-        content.addView(label("Fundação 0.1.0  •  Interface nativa em construção", 12, MUTED, false).apply {
+        content.addView(label("Fundação 0.2.0  •  Interface nativa em construção", 12, MUTED, false).apply {
             setPadding(2, 22, 0, 0)
         })
     }
@@ -187,12 +180,12 @@ class MainActivity : AppCompatActivity() {
                     addView(label(channel.name, 16, WHITE, true).apply { setPadding(0, 6, 0, 0) })
                     addView(label("${channel.sources.size} fonte(s)", 12, MUTED, false).apply { setPadding(0, 4, 0, 0) })
                     setOnClickListener {
-                        val url = channel.primarySource
-                        if (url.isNullOrBlank()) {
+                        if (channel.sources.isEmpty()) {
                             status.text = "Este canal não possui uma fonte disponível."
                         } else {
                             startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
-                                putExtra(PlayerActivity.EXTRA_URL, url)
+                                putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(channel.sources))
+                                putExtra(PlayerActivity.EXTRA_URL, channel.primarySource)
                                 putExtra(PlayerActivity.EXTRA_TITLE, channel.name)
                             })
                         }
@@ -221,20 +214,17 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-    private fun focusBackground(color: Int = PANEL): android.graphics.drawable.Drawable {
-        return android.graphics.drawable.GradientDrawable().apply {
+    private fun focusBackground(color: Int = PANEL): android.graphics.drawable.Drawable =
+        android.graphics.drawable.GradientDrawable().apply {
             setColor(color)
             cornerRadius = 12f
             setStroke(2, 0xFF4A4A4A.toInt())
         }
-    }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (content.childCount > 0) {
-                showSection("Início")
-                return true
-            }
+        if (keyCode == KeyEvent.KEYCODE_BACK && content.childCount > 0) {
+            showSection("Início")
+            return true
         }
         return super.onKeyDown(keyCode, event)
     }
