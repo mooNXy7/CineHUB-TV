@@ -389,32 +389,38 @@ class MainActivity : AppCompatActivity() {
     private fun showMyList() {
         content.removeAllViews()
         content.addView(label("Minha lista", 28, WHITE, true).apply { setPadding(d(0), d(12), d(0), d(8)) })
-        content.addView(label("Seus canais favoritos ficam salvos neste aparelho.", 14, MUTED, false).apply {
+        content.addView(label("Filmes, séries, animes, doramas e canais que você salvou.", 14, MUTED, false).apply {
             setPadding(d(0), d(0), d(0), d(14))
         })
-        val status = label("", 14, MUTED, false).apply { setPadding(d(2), d(12), d(0), d(12)) }
+        val status = label("Carregando sua lista…", 14, MUTED, false).apply { setPadding(d(2), d(12), d(0), d(12)) }
         content.addView(status)
-        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(results)
-        if (channels.isEmpty()) {
-            status.text = if (favoriteNames.isEmpty()) "Ainda não há favoritos. Abra Ao vivo e toque no coração de um canal." else "Carregando seus canais favoritos…"
-            io.execute {
-                try {
-                    val loaded = CatalogRepository.loadChannels()
-                    runOnUiThread {
-                        channels = loaded
-                        val favorites = loaded.filter { favoriteNames.contains(it.name) }
-                        status.text = if (favorites.isEmpty()) "Ainda não há favoritos. Abra Ao vivo e toque no coração de um canal." else "${favorites.size} canal(is) favorito(s)"
-                        renderChannelRows(favorites, results, status, "")
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread { status.text = "Não foi possível carregar os favoritos. Verifique a conexão." }
+        val mediaResults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(mediaResults)
+        val channelResults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(channelResults)
+        io.execute {
+            val media = mutableListOf<MediaItem>()
+            val savedIds = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+                .getStringSet("favorite_media", emptySet()).orEmpty()
+            if (savedIds.isNotEmpty()) {
+                listOf("Filmes", "Séries", "Animes", "Doramas").forEach { category ->
+                    try { media.addAll(OnlineCatalogRepository.feed(category).filter { savedIds.contains(it.id) }) }
+                    catch (_: Exception) { }
                 }
             }
-        } else {
-            val favorites = channels.filter { favoriteNames.contains(it.name) }
-            status.text = if (favorites.isEmpty()) "Ainda não há favoritos. Abra Ao vivo e toque no coração de um canal." else "${favorites.size} canal(is) favorito(s)"
-            renderChannelRows(favorites, results, status, "")
+            var loadedChannels = channels
+            if (loadedChannels.isEmpty()) try { loadedChannels = CatalogRepository.loadChannels() } catch (_: Exception) { }
+            runOnUiThread {
+                if (currentSection != "Minha lista") return@runOnUiThread
+                channels = loadedChannels
+                val favorites = loadedChannels.filter { favoriteNames.contains(it.name) }
+                status.text = when {
+                    media.isEmpty() && favorites.isEmpty() -> "Sua lista está vazia. Use o coração nos cards para salvar títulos ou canais."
+                    else -> "${media.size + favorites.size} item(ns) salvo(s)"
+                }
+                if (media.isNotEmpty()) renderMediaCards(media.distinctBy { it.id }, mediaResults)
+                if (favorites.isNotEmpty()) renderChannelRows(favorites, channelResults, status, "")
+            }
         }
     }
 
