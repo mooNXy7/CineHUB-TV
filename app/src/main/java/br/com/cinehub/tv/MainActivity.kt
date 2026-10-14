@@ -464,7 +464,7 @@ class MainActivity : AppCompatActivity() {
                     if (currentSection != "Buscar") return@runOnUiThread
                     channels = loadedChannels
                     val total = finalChannels.size + movies.size + series.size
-                    status.text = when {
+                    val summary = when {
                         total > 0 -> "$total resultado(s) encontrados"
                         channelError && movieError && seriesError -> "Não foi possível acessar as fontes. Verifique a conexão e tente novamente."
                         else -> "Nenhum resultado encontrado para “$query”. Tente outro termo."
@@ -473,10 +473,10 @@ class MainActivity : AppCompatActivity() {
 
                     channelResults.removeAllViews()
                     if (finalChannels.isNotEmpty()) {
+                        renderChannelRows(finalChannels, channelResults, status, query)
                         channelResults.addView(label("CANAIS AO VIVO  •  ${finalChannels.size}", 19, WHITE, true).apply {
                             setPadding(d(0), d(14), d(0), d(8))
-                        })
-                        renderChannelRows(finalChannels, channelResults, status, query)
+                        }, 0)
                     } else if (channelError) {
                         channelResults.addView(label("Não foi possível pesquisar canais ao vivo agora.", 13, MUTED, false).apply {
                             setPadding(d(0), d(6), d(0), d(6))
@@ -485,23 +485,24 @@ class MainActivity : AppCompatActivity() {
 
                     movieResults.removeAllViews()
                     if (movies.isNotEmpty()) {
+                        renderMediaCards(movies, movieResults)
                         movieResults.addView(label("FILMES  •  ${movies.size}", 19, WHITE, true).apply {
                             setPadding(d(0), d(16), d(0), d(8))
-                        })
-                        renderMediaCards(movies, movieResults)
+                        }, 0)
                     } else if (movieError) {
                         movieResults.addView(label("Não foi possível pesquisar filmes agora.", 13, MUTED, false))
                     }
 
                     seriesResults.removeAllViews()
                     if (series.isNotEmpty()) {
+                        renderMediaCards(series, seriesResults)
                         seriesResults.addView(label("SÉRIES, ANIMES E DORAMAS  •  ${series.size}", 19, WHITE, true).apply {
                             setPadding(d(0), d(16), d(0), d(8))
-                        })
-                        renderMediaCards(series, seriesResults)
+                        }, 0)
                     } else if (seriesError) {
                         seriesResults.addView(label("Não foi possível pesquisar séries agora.", 13, MUTED, false))
                     }
+                    status.text = summary
                 }
             }
         }
