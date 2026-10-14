@@ -4,7 +4,7 @@ Branch de trabalho: `native-kotlin-foundation`
 
 ## Progresso geral
 
-Estimativa de planejamento: **20% da reconstrução completa**. A base técnica já compila, mas as áreas de conteúdo ainda não estão completas e não houve validação em Android TV físico.
+Estimativa de planejamento: **22% da reconstrução completa**. A base técnica já compila, mas as áreas de conteúdo ainda não estão completas e não houve validação em Android TV físico.
 
 ## Concluído
 
@@ -16,11 +16,11 @@ Estimativa de planejamento: **20% da reconstrução completa**. A base técnica 
 - [x] Correção do botão Voltar aplicada.
 - [x] Build de depuração concluído com sucesso no GitHub Actions.
 
-## Em andamento / próximo ciclo
+## Em andamento / próximo ciclo\n\n- [ ] Confirmar compilação após a integração da pesquisa global e da busca ao vivo.
 
 - [ ] Aplicar os arquivos oficiais de identidade visual como recursos locais do app (logo, ícone e splash).
 - [ ] Refinar foco, tamanhos e navegação por controle remoto em telas de TV.
-- [ ] Implementar pesquisa funcional para catálogo/canais.
+- [x] Implementar pesquisa por nome/categoria na seção Ao vivo e conectar a tela Buscar ao catálogo de canais (aguardando confirmação do build desta revisão).
 - [ ] Exibir logos dos canais com fallback e carregamento seguro.
 - [ ] Melhorar mensagens de erro, carregamento e nova tentativa sem travar a interface.
 
