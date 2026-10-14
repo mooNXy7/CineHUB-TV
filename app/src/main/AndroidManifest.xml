@@ -8,7 +8,12 @@
         android:allowBackup="false"
         android:label="CineHUB TV"
         android:theme="@style/Theme.CineHUB"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="true">
+        <activity
+            android:name=".PlayerActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:exported="false"
+            android:screenOrientation="landscape" />
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize"
