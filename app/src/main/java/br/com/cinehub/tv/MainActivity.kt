@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
             "Buscar" -> { showCatalogSearch(); return }
             "Minha lista" -> { showMyList(); return }
             "Ajustes" -> { showSettings(); return }
-            "Rádio" -> { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
+            "Rádio" -> { showRadioStations(); return }
             "Filmes", "Séries", "Animes", "Doramas" -> { showMediaSection(section); return }
         }
         showHomeLanding()
@@ -489,6 +489,46 @@ class MainActivity : AppCompatActivity() {
             android.widget.Toast.LENGTH_SHORT).show()
     }
 
+    private fun showRadioStations() {
+        content.removeAllViews()
+        content.addView(label("Rádios online", 24, WHITE, true).apply { setPadding(d(2), d(6), 0, d(4)) })
+        content.addView(label("Estações carregadas do catálogo público do Saimo TV", 13, MUTED, false).apply { setPadding(d(2), 0, 0, d(12)) })
+        val status = label("Carregando estações...", 15, MUTED, false).apply { setPadding(d(12), d(14), d(12), d(14)) }
+        content.addView(status)
+        io.execute {
+            val stations = try { SaimoContentRepository.loadRadios() } catch (_: Exception) { emptyList() }
+            runOnUiThread {
+                if (currentSection != "Rádio") return@runOnUiThread
+                content.removeView(status)
+                if (stations.isEmpty()) {
+                    content.addView(label("Não foi possível carregar as rádios. Verifique a conexão e tente novamente.", 15, MUTED, false))
+                    return@runOnUiThread
+                }
+                content.addView(label("${stations.size} estações disponíveis", 13, RED, true).apply { setPadding(d(2), d(2), 0, d(8)) })
+                stations.forEach { station ->
+                    val row = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                        setPadding(d(12), d(8), d(12), d(8)); background = focusBackground(PANEL)
+                        isFocusable = true; isFocusableInTouchMode = true
+                    }
+                    val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; station.logoUrl?.let { load(it) { crossfade(true) } } }
+                    row.addView(logo, LinearLayout.LayoutParams(d(52), d(52)).apply { marginEnd = d(12) })
+                    val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                    texts.addView(label(station.name, 16, WHITE, true))
+                    texts.addView(label("Rádio online  •  ▶ Reproduzir", 12, MUTED, false).apply { setPadding(0, d(4), 0, 0) })
+                    row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.setOnClickListener {
+                        startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                            putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, arrayListOf(station.streamUrl))
+                            putExtra(PlayerActivity.EXTRA_URL, station.streamUrl)
+                            putExtra(PlayerActivity.EXTRA_TITLE, station.name)
+                        })
+                    }
+                    content.addView(row, LinearLayout.LayoutParams(-1, d(68)).apply { bottomMargin = d(5) })
+                }
+            }
+        }
+    }
     private fun showMediaDetails(item: MediaItem) {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -530,10 +570,28 @@ class MainActivity : AppCompatActivity() {
             background = focusBackground(RED)
             isFocusable = true; isFocusableInTouchMode = true
             setOnClickListener {
-                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Reprodução")
-                    .setMessage("Este título ainda não tem uma fonte de reprodução vinculada ao catálogo do CineHUB TV.")
-                    .setPositiveButton("Entendi", null).show()
+                text = "⏳  Procurando fonte..."
+                isEnabled = false
+                io.execute {
+                    val sources = try { SaimoContentRepository.findDirectPlayback(item.title, item.type == "movie") } catch (_: Exception) { emptyList() }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        isEnabled = true
+                        text = "▶  Assistir"
+                        if (sources.isNotEmpty()) {
+                            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                                putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(sources))
+                                putExtra(PlayerActivity.EXTRA_URL, sources.first())
+                                putExtra(PlayerActivity.EXTRA_TITLE, item.title)
+                            })
+                        } else {
+                            androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                                .setTitle("Fonte não encontrada")
+                                .setMessage("Não encontramos uma URL direta compatível com o player nativo para este título. Vamos ampliar o resolvedor de fontes na próxima etapa.")
+                                .setPositiveButton("Entendi", null).show()
+                        }
+                    }
+                }
             }
         }
         actions.addView(watch)
