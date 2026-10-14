@@ -84,8 +84,13 @@ class MainActivity : AppCompatActivity() {
         navScroll.addView(nav)
         root.addView(navScroll, LinearLayout.LayoutParams(-1, d(54)))
 
-        val scroll = ScrollView(this)
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(0), d(16), d(0), d(20)) }
+        val scroll = ScrollView(this).apply { clipChildren = false; clipToPadding = false }
+        content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
+            setPadding(d(0), d(20), d(0), d(28))
+        }
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
@@ -122,8 +127,17 @@ class MainActivity : AppCompatActivity() {
         content.addView(label("Explore o CineHUB", 22, WHITE, true).apply {
             setPadding(d(2), d(24), d(0), d(12))
         })
-        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val scroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            clipChildren = false
+            clipToPadding = false
+            setPadding(d(8), d(8), d(8), d(8))
+        }
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
+        }
         listOf("Filmes", "Séries", "Animes", "Doramas").forEach { name ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -297,8 +311,8 @@ class MainActivity : AppCompatActivity() {
                     setPadding(d(9), d(3), d(9), d(10))
                 })
                 setOnFocusChangeListener { view, focused ->
-                    view.scaleX = if (focused) 1.035f else 1f
-                    view.scaleY = if (focused) 1.035f else 1f
+                    view.scaleX = if (focused) 1.015f else 1f
+                    view.scaleY = if (focused) 1.015f else 1f
                     view.elevation = if (focused) d(8).toFloat() else 0f
                 }
                 setOnClickListener { showMediaDetails(item) }
@@ -306,7 +320,7 @@ class MainActivity : AppCompatActivity() {
             row.addView(card, LinearLayout.LayoutParams(d(164), d(278)).apply { marginEnd = d(14) })
         }
         scroll.addView(row)
-        container.addView(scroll, LinearLayout.LayoutParams(-1, d(290)))
+        container.addView(scroll, LinearLayout.LayoutParams(-1, d(306)))
     }
 
     private fun isMediaFavorite(item: MediaItem): Boolean =
@@ -410,6 +424,9 @@ class MainActivity : AppCompatActivity() {
             }
             var loadedChannels = channels
             if (loadedChannels.isEmpty()) try { loadedChannels = CatalogRepository.loadChannels() } catch (_: Exception) { }
+            val savedChannelSnapshots = readSavedFavoriteChannels()
+            loadedChannels = (loadedChannels + savedChannelSnapshots)
+                .distinctBy { it.name.trim().lowercase() }
             runOnUiThread {
                 if (currentSection != "Minha lista") return@runOnUiThread
                 channels = loadedChannels
@@ -424,11 +441,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun readSavedFavoriteChannels(): List<TvChannel> {
+        val raw = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+            .getString("favorite_channel_items", "[]") ?: "[]"
+        return try {
+            val array = org.json.JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                val obj = array.optJSONObject(index) ?: return@mapNotNull null
+                val name = obj.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val sourcesJson = obj.optJSONArray("sources") ?: org.json.JSONArray()
+                val sources = (0 until sourcesJson.length()).mapNotNull { sourcesJson.optString(it).takeIf { s -> s.startsWith("http://") || s.startsWith("https://") } }
+                TvChannel(name, obj.optString("category", "Outros"), obj.optString("logo").takeIf { it.startsWith("http://") || it.startsWith("https://") }, sources)
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun saveFavoriteChannelSnapshot(channel: TvChannel) {
+        val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+        val saved = readSavedFavoriteChannels().filterNot { it.name.equals(channel.name, ignoreCase = true) }.toMutableList()
+        if (favoriteNames.contains(channel.name)) saved.add(channel)
+        val array = org.json.JSONArray()
+        saved.forEach { item ->
+            array.put(org.json.JSONObject().apply {
+                put("name", item.name)
+                put("category", item.category)
+                put("logo", item.logo ?: "")
+                put("sources", org.json.JSONArray(item.sources))
+            })
+        }
+        prefs.edit().putString("favorite_channel_items", array.toString()).apply()
+    }
+
     private fun toggleFavorite(channel: TvChannel) {
         if (!favoriteNames.add(channel.name)) favoriteNames.remove(channel.name)
         getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
             .putStringSet("favorite_channels", favoriteNames.toSet())
             .apply()
+        saveFavoriteChannelSnapshot(channel)
     }
 
 
