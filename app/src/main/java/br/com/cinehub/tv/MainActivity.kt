@@ -95,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         if (section == "Ao vivo") { showLiveChannels(); return }
         if (section == "Buscar") { showCatalogSearch(); return }
         if (section == "Minha lista") { showMyList(); return }
+        if (section == "Ajustes") { showSettings(); return }
         if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -177,6 +178,56 @@ class MainActivity : AppCompatActivity() {
         getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
             .putStringSet("favorite_channels", favoriteNames.toSet())
             .apply()
+    }
+
+
+    private fun showSettings() {
+        content.removeAllViews()
+        content.addView(label("Ajustes", 28, WHITE, true).apply { setPadding(0, 12, 0, 8) })
+        content.addView(label("Preferências e manutenção do CineHUB TV", 14, MUTED, false).apply {
+            setPadding(0, 0, 0, 18)
+        })
+        val status = label("Catálogo: ${if (channels.isEmpty()) "ainda não carregado" else "${channels.size} canais em memória"}", 15, MUTED, false).apply {
+            setPadding(0, 10, 0, 14)
+        }
+        content.addView(status)
+        fun action(title: String, description: String, onClick: () -> Unit) {
+            val item = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(18, 14, 18, 14)
+                background = focusBackground(PANEL)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                addView(label(title, 17, WHITE, true))
+                addView(label(description, 13, MUTED, false).apply { setPadding(0, 5, 0, 0) })
+                setOnClickListener { onClick() }
+            }
+            content.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 })
+        }
+        action("Atualizar catálogo de canais", "Busca novamente as fontes públicas conectadas.") {
+            status.text = "Atualizando catálogo…"
+            io.execute {
+                try {
+                    val loaded = CatalogRepository.loadChannels()
+                    runOnUiThread {
+                        channels = loaded
+                        status.text = "Catálogo atualizado: ${loaded.size} canais disponíveis."
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { status.text = "Não foi possível atualizar. Confira a internet e tente novamente." }
+                }
+            }
+        }
+        action("Limpar Minha lista", "Remove os canais favoritos salvos neste aparelho.") {
+            favoriteNames.clear()
+            getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
+                .putStringSet("favorite_channels", emptySet())
+                .apply()
+            status.text = "Minha lista foi limpa."
+        }
+        action("Sobre o CineHUB TV", "Versão nativa 0.2.0 • Interface Android/Kotlin • Player Media3") {
+            status.text = "CineHUB TV está em reconstrução nativa. Esta versão ainda é de desenvolvimento."
+        }
     }
 
     private fun showInfo(title: String, message: String) {
