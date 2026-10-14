@@ -1,4 +1,4 @@
-# CineHUB TV 1.2.6
+# CineHUB TV 1.2.7
 
 Atualização visual e de navegação baseada na versão 1.4 Supabase + TMDB.
 
@@ -37,7 +37,7 @@ Atualização visual e de navegação baseada na versão 1.4 Supabase + TMDB.
 - Preservada a integração Supabase/TMDB, favoritos, pesquisa online e navegação existente.
 
 
-## Versão 1.2.6
+## Versão 1.2.7
 - Interface redesenhada para televisores em paisagem 16:9, com navegação e foco adequados ao controle remoto.
 - Teclado de pesquisa movido para a coluna esquerda, acima das categorias; coluna e catálogo acompanham a altura útil da tela.
 - Grade de cards limpa e expandida para a área principal, com categorias/favoritos mantidos conforme a seção.
