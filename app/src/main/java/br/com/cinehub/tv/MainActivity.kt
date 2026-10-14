@@ -1,5 +1,8 @@
 package br.com.cinehub.tv
 
+import android.content.Intent
+import java.util.concurrent.Executors
+
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -23,6 +26,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private val sections = listOf("Início", "Ao vivo", "Filmes", "Séries", "Animes", "Doramas", "Rádio", "Minha lista", "Buscar", "Ajustes")
+    private val io = Executors.newSingleThreadExecutor()
+    private var channels: List<TvChannel> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +86,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSection(section: String) {
         content.removeAllViews()
+        if (section == "Ao vivo") { showLiveChannels(); return }
+        if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa.") ; return }
         val hero = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.BOTTOM
@@ -126,6 +133,83 @@ class MainActivity : AppCompatActivity() {
         content.addView(label("Fundação 0.1.0  •  Interface nativa em construção", 12, MUTED, false).apply {
             setPadding(2, 22, 0, 0)
         })
+    }
+
+    private fun showInfo(title: String, message: String) {
+        content.removeAllViews()
+        content.addView(label(title, 26, WHITE, true).apply { setPadding(0, 18, 0, 12) })
+        content.addView(label(message, 16, MUTED, false))
+    }
+
+    private fun showLiveChannels() {
+        content.removeAllViews()
+        content.addView(label("Canais ao vivo", 26, WHITE, true).apply { setPadding(0, 12, 0, 8) })
+        val status = label("Carregando catálogo público…", 15, MUTED, false)
+        content.addView(status)
+        if (channels.isNotEmpty()) {
+            renderChannelRows(channels, status)
+            return
+        }
+        io.execute {
+            try {
+                val loaded = CatalogRepository.loadChannels()
+                runOnUiThread {
+                    channels = loaded
+                    renderChannelRows(loaded, status)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    status.text = "Não foi possível carregar o catálogo agora. Verifique a conexão e tente novamente."
+                }
+            }
+        }
+    }
+
+    private fun renderChannelRows(items: List<TvChannel>, status: TextView) {
+        content.removeView(status)
+        content.addView(label("${items.size} canais encontrados", 14, MUTED, false).apply {
+            setPadding(0, 0, 0, 12)
+        })
+        val categories = items.groupBy { it.category }
+        categories.toSortedMap().forEach { (category, list) ->
+            content.addView(label(category, 19, WHITE, true).apply { setPadding(0, 16, 0, 8) })
+            val rowScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            list.take(30).forEach { channel ->
+                val card = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(16, 12, 16, 12)
+                    background = focusBackground(PANEL)
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    addView(label("AO VIVO", 10, RED, true))
+                    addView(label(channel.name, 16, WHITE, true).apply { setPadding(0, 6, 0, 0) })
+                    addView(label("${channel.sources.size} fonte(s)", 12, MUTED, false).apply { setPadding(0, 4, 0, 0) })
+                    setOnClickListener {
+                        val url = channel.primarySource
+                        if (url.isNullOrBlank()) {
+                            status.text = "Este canal não possui uma fonte disponível."
+                        } else {
+                            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                                putExtra(PlayerActivity.EXTRA_URL, url)
+                                putExtra(PlayerActivity.EXTRA_TITLE, channel.name)
+                            })
+                        }
+                    }
+                }
+                val lp = LinearLayout.LayoutParams(230, 100)
+                lp.marginEnd = 12
+                row.addView(card, lp)
+            }
+            rowScroll.addView(row)
+            content.addView(rowScroll, LinearLayout.LayoutParams(-1, 110))
+        }
+    }
+
+    override fun onDestroy() {
+        io.shutdownNow()
+        super.onDestroy()
     }
 
     private fun label(text: String, size: Int, color: Int, bold: Boolean): TextView =
