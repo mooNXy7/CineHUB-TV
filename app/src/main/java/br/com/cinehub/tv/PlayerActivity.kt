@@ -61,6 +61,9 @@ class PlayerActivity : AppCompatActivity() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) {
                         status.visibility = View.GONE
+                        getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
+                            .putString("continue_channel_name", channelTitle)
+                            .apply()
                     } else if (playbackState == Player.STATE_BUFFERING) {
                         status.text = "Carregando " + channelTitle + "…"
                         status.visibility = View.VISIBLE
