@@ -14,6 +14,8 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.inputmethod.EditorInfo
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
+import coil.load
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -341,6 +343,18 @@ class MainActivity : AppCompatActivity() {
                     }
                     topLine.addView(heart)
                     addView(topLine)
+                    channel.logo?.let { logoUrl ->
+                        val logoView = ImageView(this@MainActivity).apply {
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                            contentDescription = "Logo de ${channel.name}"
+                            load(logoUrl) {
+                                crossfade(true)
+                                placeholder(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
+                                error(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
+                            }
+                        }
+                        addView(logoView, LinearLayout.LayoutParams(56, 40).apply { topMargin = 4 })
+                    }
                     addView(label(channel.name, 16, WHITE, true).apply { setPadding(0, 6, 0, 0) })
                     addView(label(
                         when (channel.sources.size) {
