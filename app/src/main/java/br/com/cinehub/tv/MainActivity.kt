@@ -6,6 +6,11 @@ import java.util.concurrent.Executors
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.os.Handler
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -38,6 +43,9 @@ class MainActivity : AppCompatActivity() {
     private var channels: List<TvChannel> = emptyList()
     private var currentSection = "Início"
     private val favoriteNames = linkedSetOf<String>()
+    private val mainHandler = Handler(android.os.Looper.getMainLooper())
+    private var clockView: TextView? = null
+    private val clockTick = object : Runnable { override fun run() { clockView?.text = SimpleDateFormat("HH:mm", Locale("pt", "BR")).apply { timeZone = TimeZone.getTimeZone("America/Sao_Paulo") }.format(Date()); mainHandler.postDelayed(this, 30_000L) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,21 +70,24 @@ class MainActivity : AppCompatActivity() {
         header.addView(label("HUB", 28, RED, true))
         val spacer = View(this)
         header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
-        header.addView(label("BR  •  TV", 14, MUTED, false))
+        clockView = label("--:--", 18, WHITE, true)
+        header.addView(clockView!!)
+        clockTick.run()
         root.addView(header, LinearLayout.LayoutParams(-1, d(54)))
 
         val navScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        sections.forEachIndexed { index, title ->
-            val item = label(title, 15, if (index == 0) WHITE else MUTED, index == 0).apply {
-                setPadding(d(16), d(14), d(16), d(14))
+        sections.forEach { title ->
+            val item = label(title, 15, if (title == currentSection) WHITE else MUTED, title == currentSection).apply {
+                setPadding(d(16), d(11), d(16), d(11))
                 isFocusable = true
                 isFocusableInTouchMode = true
-                background = focusBackground()
+                background = navBackground(title == currentSection, false)
                 setOnClickListener { showSection(title) }
                 setOnFocusChangeListener { view, focused ->
-                    view.setBackgroundColor(if (focused) RED else Color.TRANSPARENT)
-                    setTextColor(if (focused || index == 0) WHITE else MUTED)
+                    view.background = navBackground(title == currentSection, focused)
+                    setTextColor(if (title == currentSection || focused) WHITE else MUTED)
+                    setTypeface(typeface, if (title == currentSection) Typeface.BOLD else Typeface.NORMAL)
                 }
             }
             nav.addView(item)
@@ -99,6 +110,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSection(section: String) {
         currentSection = section
+        refreshNavigationSelection()
         content.removeAllViews()
         when (section) {
             "Ao vivo" -> { showLiveChannels(); return }
@@ -109,6 +121,26 @@ class MainActivity : AppCompatActivity() {
             "Filmes", "Séries", "Animes", "Doramas" -> { showMediaSection(section); return }
         }
         showHomeLanding()
+    }
+
+    private fun navBackground(selected: Boolean, focused: Boolean): android.graphics.drawable.Drawable {
+        return android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = d(12).toFloat()
+            setColor(if (selected) 0xFF4A1118.toInt() else Color.TRANSPARENT)
+            if (focused) setStroke(d(2), 0xFFBBBBBB.toInt()) else if (selected) setStroke(d(1), 0xFF7A2932.toInt())
+        }
+    }
+
+    private fun refreshNavigationSelection() {
+        val navScroll = root.getChildAt(1) as? HorizontalScrollView ?: return
+        val nav = navScroll.getChildAt(0) as? LinearLayout ?: return
+        sections.forEachIndexed { index, title ->
+            val item = nav.getChildAt(index) as? TextView ?: return@forEachIndexed
+            val selected = title == currentSection
+            item.background = navBackground(selected, item.hasFocus())
+            item.setTextColor(if (selected || item.hasFocus()) WHITE else MUTED)
+            item.setTypeface(item.typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
+        }
     }
 
     private fun showHomeLanding() {
@@ -836,6 +868,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(clockTick)
         io.shutdownNow()
         super.onDestroy()
     }
