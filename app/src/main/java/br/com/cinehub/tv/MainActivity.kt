@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private val sections = listOf("Início", "Ao vivo", "Filmes", "Séries", "Animes", "Doramas", "Rádio", "Minha lista", "Buscar", "Ajustes")
     private val io = Executors.newSingleThreadExecutor()
     private var channels: List<TvChannel> = emptyList()
+    private var currentSection = "Início"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +82,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSection(section: String) {
+        currentSection = section
         content.removeAllViews()
         if (section == "Ao vivo") { showLiveChannels(); return }
         if (section == "Rádio") { showInfo("Rádio", "A integração das rádios entra na próxima etapa."); return }
@@ -222,7 +224,7 @@ class MainActivity : AppCompatActivity() {
         }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && content.childCount > 0) {
+        if (keyCode == KeyEvent.KEYCODE_BACK && currentSection != "Início") {
             showSection("Início")
             return true
         }
