@@ -156,37 +156,22 @@ class MainActivity : AppCompatActivity() {
         })
         hero.addView(label("Filmes, séries, animes e doramas com informações e capas online.", 16, MUTED, false))
         content.addView(hero, LinearLayout.LayoutParams(-1, d(210)))
-        content.addView(label("Explore o CineHUB", 22, WHITE, true).apply {
-            setPadding(d(2), d(24), d(0), d(12))
-        })
-        val scroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            clipChildren = false
-            clipToPadding = false
-            setPadding(d(8), d(8), d(8), d(8))
-        }
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            clipChildren = false
-            clipToPadding = false
-        }
-        listOf("Filmes", "Séries", "Animes", "Doramas").forEach { name ->
+        content.addView(label("Explore o CineHUB", 22, WHITE, true).apply { setPadding(d(2), d(20), d(0), d(8)) })
+        val grid = android.widget.GridLayout(this).apply { columnCount = 3; rowCount = 2; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
+        listOf("Filmes", "Séries", "Doramas", "Animes", "Rádio", "Ao vivo").forEachIndexed { index, name ->
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.BOTTOM
-                setPadding(d(16), d(12), d(16), d(16))
-                isFocusable = true
-                isFocusableInTouchMode = true
-                background = focusBackground(PANEL)
-                addView(label("CINEHUB ONLINE", 11, RED, true))
-                addView(label(name, 20, WHITE, true).apply { setPadding(d(0), d(8), d(0), d(0)) })
-                addView(label("Ver catálogo", 12, MUTED, false).apply { setPadding(d(0), d(5), d(0), d(0)) })
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(d(16), d(10), d(16), d(10)); background = focusBackground(PANEL)
+                isFocusable = true; isFocusableInTouchMode = true
+                addView(label("CINEHUB", 10, RED, true))
+                addView(label(name, 19, WHITE, true).apply { setPadding(0, d(5), 0, d(3)) })
+                addView(label(if (name == "Ao vivo") "Canais e programação" else if (name == "Rádio") "Estações online" else "Ver catálogo", 12, MUTED, false))
                 setOnClickListener { showSection(name) }
             }
-            row.addView(card, LinearLayout.LayoutParams(d(220), d(122)).apply { marginEnd = d(14) })
+            val lp = android.widget.GridLayout.LayoutParams().apply { width = 0; height = d(96); columnSpec = android.widget.GridLayout.spec(index % 3, 1f); rowSpec = android.widget.GridLayout.spec(index / 3); setMargins(d(5), d(5), d(5), d(5)) }
+            grid.addView(card, lp)
         }
-        scroll.addView(row)
-        content.addView(scroll, LinearLayout.LayoutParams(-1, d(132)))
+        content.addView(grid, LinearLayout.LayoutParams(-1, d(216)))
         content.addView(label("Os títulos, capas e sinopses são consultados online pelo Supabase.", 13, MUTED, false).apply {
             setPadding(d(2), d(22), d(0), d(0))
         })
