@@ -169,7 +169,7 @@ jobs:
           s2, count = re.subn(r'"https://[^"]*update\.json"', '"https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json"', s, count=1, flags=re.I)
           if count == 0:
               raise SystemExit("Não encontrei a URL update.json na MainActivity; interrompendo para não publicar OTA quebrado.")
-          s2 = re.sub(r"CURRENT_VERSION_CODE=\\d+", "CURRENT_VERSION_CODE=127", s2)
+          s2 = re.sub(r"CURRENT_VERSION_CODE=\d+", "CURRENT_VERSION_CODE=127", s2)
           s2 = re.sub(r"CineHUB-TV/1\.[0-9.]+", "CineHUB-TV/1.2.7", s2)
           p.write_text(s2, encoding="utf-8")
           PY
