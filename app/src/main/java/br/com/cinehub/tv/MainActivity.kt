@@ -246,36 +246,144 @@ class MainActivity : AppCompatActivity() {
         items.take(24).forEach { item ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                background = focusBackground(PANEL)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(PANEL); cornerRadius = d(14).toFloat()
+                    setStroke(d(1), 0xFF414141.toInt())
+                }
+                clipToOutline = true
                 isFocusable = true
                 isFocusableInTouchMode = true
-                val poster = ImageView(this@MainActivity).apply {
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    contentDescription = "Capa de ${item.title}"
+                val posterFrame = android.widget.FrameLayout(this@MainActivity).apply {
                     setBackgroundColor(0xFF242424.toInt())
-                    item.poster?.let { url -> load(url) {
-                        crossfade(true)
-                        placeholder(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
-                        error(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
-                    } }
+                    val poster = ImageView(this@MainActivity).apply {
+                        scaleType = ImageView.ScaleType.CENTER_CROP
+                        contentDescription = "Capa de ${item.title}"
+                        item.poster?.let { url -> load(url) {
+                            crossfade(true)
+                            placeholder(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
+                            error(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
+                        } }
+                    }
+                    addView(poster, android.widget.FrameLayout.LayoutParams(-1, -1))
+                    val favorite = label(if (isMediaFavorite(item)) "♥" else "♡", 22,
+                        if (isMediaFavorite(item)) RED else WHITE, true).apply {
+                        gravity = Gravity.CENTER
+                        background = android.graphics.drawable.GradientDrawable().apply {
+                            shape = android.graphics.drawable.GradientDrawable.OVAL
+                            setColor(0xD9000000.toInt())
+                            setStroke(d(1), 0x66FFFFFF)
+                        }
+                        isFocusable = true
+                        isFocusableInTouchMode = true
+                        contentDescription = if (isMediaFavorite(item)) "Remover da Minha Lista" else "Adicionar à Minha Lista"
+                        setOnClickListener {
+                            toggleMediaFavorite(item)
+                            text = if (isMediaFavorite(item)) "♥" else "♡"
+                            setTextColor(if (isMediaFavorite(item)) RED else WHITE)
+                            contentDescription = if (isMediaFavorite(item)) "Remover da Minha Lista" else "Adicionar à Minha Lista"
+                        }
+                    }
+                    addView(favorite, android.widget.FrameLayout.LayoutParams(d(40), d(40), Gravity.TOP or Gravity.END).apply {
+                        topMargin = d(8); marginEnd = d(8)
+                    })
                 }
-                addView(poster, LinearLayout.LayoutParams(-1, d(190)))
-                addView(label(item.title, 14, WHITE, true).apply { maxLines = 2; setPadding(d(8), d(8), d(8), d(2)) })
+                addView(posterFrame, LinearLayout.LayoutParams(-1, d(190)))
+                addView(label(item.title, 14, WHITE, true).apply {
+                    maxLines = 2
+                    setPadding(d(9), d(9), d(9), d(3))
+                })
                 val meta = listOf(item.year, if (item.rating != "—") "★ ${item.rating}" else "").filter { it.isNotBlank() }.joinToString("  •  ")
-                addView(label(meta.ifBlank { "Catálogo online" }, 11, MUTED, false).apply { setPadding(d(8), d(2), d(8), d(8)) })
-                setOnClickListener {
-                    val synopsis = item.description.ifBlank { "A sinopse ainda não está disponível." }
-                    androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                        .setTitle(item.title)
-                        .setMessage("${if (item.year.isNotBlank()) item.year + "  •  " else ""}Nota: ${item.rating}\\n\\n$synopsis\\n\\nInformações e capa online. A reprodução deste título será conectada na próxima etapa.")
-                        .setPositiveButton("Fechar", null)
-                        .show()
+                addView(label(meta.ifBlank { "Catálogo online" }, 11, MUTED, false).apply {
+                    setPadding(d(9), d(3), d(9), d(10))
+                })
+                setOnFocusChangeListener { view, focused ->
+                    view.scaleX = if (focused) 1.035f else 1f
+                    view.scaleY = if (focused) 1.035f else 1f
+                    view.elevation = if (focused) d(8).toFloat() else 0f
                 }
+                setOnClickListener { showMediaDetails(item) }
             }
-            row.addView(card, LinearLayout.LayoutParams(d(150), d(258)).apply { marginEnd = d(12) })
+            row.addView(card, LinearLayout.LayoutParams(d(164), d(278)).apply { marginEnd = d(14) })
         }
         scroll.addView(row)
-        container.addView(scroll, LinearLayout.LayoutParams(-1, d(266)))
+        container.addView(scroll, LinearLayout.LayoutParams(-1, d(290)))
+    }
+
+    private fun isMediaFavorite(item: MediaItem): Boolean =
+        getSharedPreferences("cinehub-tv", MODE_PRIVATE).getStringSet("favorite_media", emptySet()).orEmpty().contains(item.id)
+
+    private fun toggleMediaFavorite(item: MediaItem) {
+        val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+        val saved = prefs.getStringSet("favorite_media", emptySet()).orEmpty().toMutableSet()
+        if (!saved.add(item.id)) saved.remove(item.id)
+        prefs.edit().putStringSet("favorite_media", saved).apply()
+        android.widget.Toast.makeText(this,
+            if (saved.contains(item.id)) "Adicionado à Minha Lista" else "Removido da Minha Lista",
+            android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showMediaDetails(item: MediaItem) {
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(d(20), d(18), d(20), d(12))
+            gravity = Gravity.TOP
+            setBackgroundColor(0xFF101010.toInt())
+        }
+        val poster = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            item.poster?.let { load(it) { crossfade(true) } }
+        }
+        panel.addView(poster, LinearLayout.LayoutParams(d(176), d(264)).apply { marginEnd = d(20) })
+        val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        info.addView(label(when {
+            item.type == "movie" -> "FILME"
+            currentSection == "Animes" -> "ANIME"
+            currentSection == "Doramas" -> "DORAMA"
+            else -> "SÉRIE"
+        }, 12, RED, true))
+        info.addView(label(item.title, 25, WHITE, true).apply { setPadding(0, d(6), 0, d(8)) })
+        info.addView(label("${item.year.ifBlank { "Ano não informado" }}   •   ★ ${item.rating}", 14, MUTED, true))
+        info.addView(label(item.description.ifBlank { "Sinopse indisponível para este título." }, 15, WHITE, false).apply {
+            setPadding(0, d(14), 0, d(18))
+        })
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val favorite = label(if (isMediaFavorite(item)) "♥ Na Minha Lista" else "♡ Favoritar", 14,
+            if (isMediaFavorite(item)) RED else WHITE, true).apply {
+            setPadding(d(14), d(12), d(14), d(12))
+            background = focusBackground(PANEL)
+            isFocusable = true; isFocusableInTouchMode = true
+            setOnClickListener {
+                toggleMediaFavorite(item)
+                text = if (isMediaFavorite(item)) "♥ Na Minha Lista" else "♡ Favoritar"
+                setTextColor(if (isMediaFavorite(item)) RED else WHITE)
+            }
+        }
+        val watch = label("▶  Assistir", 14, WHITE, true).apply {
+            setPadding(d(16), d(12), d(16), d(12))
+            background = focusBackground(RED)
+            isFocusable = true; isFocusableInTouchMode = true
+            setOnClickListener {
+                androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Reprodução")
+                    .setMessage("Este título ainda não tem uma fonte de reprodução vinculada ao catálogo do CineHUB TV.")
+                    .setPositiveButton("Entendi", null).show()
+            }
+        }
+        actions.addView(watch)
+        actions.addView(favorite, LinearLayout.LayoutParams(-2, -2).apply { marginStart = d(10) })
+        info.addView(actions)
+        panel.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
+            .setView(panel)
+            .setNegativeButton("Fechar", null)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setOnShowListener {
+            dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.9f).toInt(), -2)
+        }
+        dialog.show()
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.9f).toInt(), -2)
     }
 
     private fun showMyList() {
