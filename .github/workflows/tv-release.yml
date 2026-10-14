@@ -1,205 +1,66 @@
-name: CineHUB TV 1.2.7 — Integrar, validar e publicar
+name: CineHUB TV 1.2.8 — TV layout test
 
 on:
   push:
     branches: [main]
     paths:
-      - "CineHUB_TV_v1.8.zip"
+      - "frontend/**"
+      - "android/CineHUB-TV/src/main/assets/cinehub/**"
+      - "android/CineHUB-TV/build.gradle.kts"
+      - "android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java"
       - ".github/workflows/tv-release.yml"
-      - "README.md"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: cinehub-tv-release-final2
+  group: cinehub-tv-release
   cancel-in-progress: true
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repositório CineHUB-TV
+      - name: Checkout CineHUB TV
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Checkout base Android TV estável 1.2.5
-        uses: actions/checkout@v4
-        with:
-          repository: mooNXy7/CineHUB
-          ref: v1.2.5
-          path: legacy
-          persist-credentials: false
-
-      - name: Preparar Java e Gradle
+      - name: Prepare Java and Gradle
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Configurar Gradle
+      - name: Configure Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
 
-      - name: Extrair e integrar o pacote visual 1.8 como 1.2.7
+      - name: Set test version
         shell: bash
         run: |
           set -euo pipefail
-          test -s CineHUB_TV_v1.8.zip
-          mkdir -p extracted
-          unzip -q CineHUB_TV_v1.8.zip -d extracted
-          FRONTEND="extracted/CineHUB_TV_v1.8"
-          if [ -d android/CineHUB-TV ]; then
-            ANDROID_ROOT="android"
-          else
-            mkdir -p android
-            cp -a legacy/CineHUB_TV_Android/. android/
-            ANDROID_ROOT="android"
-          fi
-          export ANDROID_ROOT
-          ASSETS="$ANDROID_ROOT/CineHUB-TV/src/main/assets/cinehub"
-          test -s "$FRONTEND/index.html"
-          test -s "$FRONTEND/css/styles.css"
-          test -s "$FRONTEND/js/app.js"
-          test -s "$FRONTEND/js/webdata.js"
-          # Mantém também a interface extraída no repositório, para edição e revisão direta.
-          mkdir -p frontend
-          cp -a "$FRONTEND/." frontend/
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("frontend/index.html")
-          html = p.read_text(encoding="utf-8")
-          html = html.replace("<title>CineHUB TV 1.8</title>", "<title>CineHUB TV 1.2.7</title>")
-          html = html.replace("VERSÃO 1.7 · EXPERIÊNCIA DE TV", "VERSÃO 1.2.7 · EXPERIÊNCIA DE TV")
-          p.write_text(html, encoding="utf-8")
-          css = Path("frontend/css/styles.css")
-          text = css.read_text(encoding="utf-8").replace("/* CineHUB TV 1.8 —", "/* CineHUB TV 1.2.7 —")
-          css.write_text(text, encoding="utf-8")
-          readme = Path("frontend/README.md")
-          if readme.exists():
-              text = readme.read_text(encoding="utf-8").replace("# CineHUB TV 1.8", "# CineHUB TV 1.2.7").replace("## Versão 1.8", "## Versão 1.2.7")
-              readme.write_text(text, encoding="utf-8")
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): extrair interface CineHUB TV 1.2.7"
-            git push origin HEAD:main
-          fi
-          mkdir -p "$ASSETS"
-          cp -a "$FRONTEND/index.html" "$ASSETS/index.html"
-          cp -a "$FRONTEND/css" "$ASSETS/"
-          cp -a "$FRONTEND/js" "$ASSETS/"
-          cp -a "$FRONTEND/assets" "$ASSETS/"
-          # Preserve os motores, listas, EPG e dados locais existentes na base Android 1.2.5.
-          # A interface nova recebe um adaptador para os canais oficiais já cadastrados.
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          root = Path("android/CineHUB-TV/src/main/assets/cinehub")
-          index = root / "index.html"
-          html = index.read_text(encoding="utf-8")
-          html = re.sub(r"CineHUB TV 1\.8", "CineHUB TV 1.2.7", html)
-          html = html.replace("VERSÃO 1.7", "VERSÃO 1.2.7")
-          marker = '<script src="js/app.js"></script>'
-          bridge = marker + '\n<script src="dados/canais.js"></script>\n<script src="js/legacy-bridge.js"></script>'
-          if "js/legacy-bridge.js" not in html:
-              if marker not in html:
-                  raise SystemExit("Não encontrei o ponto de integração JS no index.html.")
-              html = html.replace(marker, bridge)
-          index.write_text(html, encoding="utf-8")
-          # O catálogo legado declara const local; exponha-o de forma explícita para o adaptador.
-          channels = root / "dados/canais.js"
-          if channels.exists():
-              source = channels.read_text(encoding="utf-8")
-              source = source.replace("const catalogoCanais =", "window.catalogoCanais =")
-              channels.write_text(source, encoding="utf-8")
-          version = root / "CINEHUB_VERSION.txt"
-          version.write_text("1.2.7\n", encoding="utf-8")
-          manifest = root / "update.json"
-          import json
-          data = json.loads(manifest.read_text(encoding="utf-8")) if manifest.exists() else {}
-          data.update({
-            "app": "CineHUB TV",
-            "version": "1.2.7",
-            "versionCode": 127,
-            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.7",
-            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.7/CineHUB-TV-v1.2.7.apk",
-            "sha256": "",
-            "channel": "stable"
-          })
-          manifest.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-          PY
-          cat > "$ASSETS/js/legacy-bridge.js" <<'JS'
-          (() => {
-            "use strict";
-            const boot = () => {
-              const app = window.CineHUB;
-              const channels = Array.isArray(window.catalogoCanais) ? window.catalogoCanais : [];
-              if (!app || typeof app.registerContent !== "function" || !channels.length) return;
-              const mapped = channels.map((c, i) => ({
-                id: "official-channel-" + (c.nome || i).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-"),
-                title: c.nome || "Canal",
-                type: "channel",
-                view: "ao-vivo",
-                category: c.categoria || "Aberta",
-                description: c.descricao || "Acesse a página oficial do canal.",
-                poster: c.logo || "",
-                url: c.aoVivo || c.site || "",
-                source: "Canal oficial"
-              }));
-              app.registerContent(mapped);
-            };
-            if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });
-            else boot();
-          })();
-          JS
-          # Atualiza a URL do manifesto OTA para o repositório exclusivo de TV.
+          sed -i -E 's/versionCode = [0-9]+/versionCode = 128/; s/versionName = "[^"]+"/versionName = "1.2.8"/' android/CineHUB-TV/build.gradle.kts
           python3 - <<'PY'
           from pathlib import Path
           import re
           p = Path("android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java")
-          if not p.exists():
-              raise SystemExit("MainActivity.java não encontrado na base Android.")
           s = p.read_text(encoding="utf-8")
-          s2, count = re.subn(r'"https://[^"]*update\.json"', '"https://raw.githubusercontent.com/mooNXy7/CineHUB-TV/main/update.json"', s, count=1, flags=re.I)
-          if count == 0:
-              raise SystemExit("Não encontrei a URL update.json na MainActivity; interrompendo para não publicar OTA quebrado.")
-          s2 = re.sub(r"CURRENT_VERSION_CODE=\d+", "CURRENT_VERSION_CODE=127", s2)
-          s2 = re.sub(r"CineHUB-TV/1\.[0-9.]+", "CineHUB-TV/1.2.7", s2)
-          p.write_text(s2, encoding="utf-8")
+          s = re.sub(r"CURRENT_VERSION_CODE=\d+", "CURRENT_VERSION_CODE=128", s)
+          s = re.sub(r"CineHUB-TV/1\.[0-9.]+", "CineHUB-TV/1.2.8", s)
+          p.write_text(s, encoding="utf-8")
+          p = Path("android/CineHUB-TV/src/main/assets/cinehub/index.html")
+          s = p.read_text(encoding="utf-8")
+          s = s.replace("CineHUB TV 1.2.7", "CineHUB TV 1.2.8").replace("VERSÃO 1.2.7", "VERSÃO 1.2.8")
+          p.write_text(s, encoding="utf-8")
+          Path("android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt").write_text("1.2.8\\n", encoding="utf-8")
           PY
-          # Altera apenas rótulos de versão; não modifica decimais CSS, SVG ou código JS.
-          python3 - <<'PY'
-          from pathlib import Path
-          root = Path("android/CineHUB-TV/src/main/assets/cinehub")
-          p = root / "css/styles.css"
-          css = p.read_text(encoding="utf-8").replace("/* CineHUB TV 1.8 —", "/* CineHUB TV 1.2.7 —")
-          p.write_text(css, encoding="utf-8")
-          p = root / "index.html"
-          html = p.read_text(encoding="utf-8")
-          html = html.replace("<title>CineHUB TV 1.8</title>", "<title>CineHUB TV 1.2.7</title>")
-          html = html.replace("VERSÃO 1.7 · EXPERIÊNCIA DE TV", "VERSÃO 1.2.7 · EXPERIÊNCIA DE TV")
-          p.write_text(html, encoding="utf-8")
-          PY
-          sed -i -E 's/versionCode = [0-9]+/versionCode = 127/; s/versionName = "[^"]+"/versionName = "1.2.7"/' android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionCode = 127' android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionName = "1.2.7"' android/CineHUB-TV/build.gradle.kts
-          grep -q 'js/legacy-bridge.js' "$ASSETS/index.html"
-          # Salva a cópia Android integrada no repositório TV (sem chaves ou keystore).
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend android
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): integrar projeto Android TV 1.2.7"
-            git push origin HEAD:main
-          fi
+          grep -q 'versionCode = 128' android/CineHUB-TV/build.gradle.kts
+          grep -q 'versionName = "1.2.8"' android/CineHUB-TV/build.gradle.kts
 
-      - name: Configurar assinatura oficial
+      - name: Decode official signing key
         env:
           CINEHUB_TV_KEYSTORE_BASE64: ${{ secrets.CINEHUB_TV_KEYSTORE_BASE64 }}
         shell: bash
@@ -209,7 +70,7 @@ jobs:
           printf '%s' "$CINEHUB_TV_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/cinehub-tv-release.jks"
           test -s "$GITHUB_WORKSPACE/cinehub-tv-release.jks"
 
-      - name: Compilar APK Release
+      - name: Build signed APK
         working-directory: android
         env:
           CINEHUB_TV_KEYSTORE_PATH: ${{ github.workspace }}/cinehub-tv-release.jks
@@ -218,7 +79,7 @@ jobs:
           CINEHUB_TV_KEY_PASSWORD: ${{ secrets.CINEHUB_TV_KEY_PASSWORD }}
         run: gradle :CineHUB-TV:assembleRelease --no-daemon --stacktrace
 
-      - name: Validar APK e assinatura
+      - name: Validate APK and signature
         shell: bash
         run: |
           set -euo pipefail
@@ -228,68 +89,52 @@ jobs:
           ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
           "$ZIPALIGN" -c -P 16 -v 4 "$APK"
           "$APKSIGNER" verify --verbose "$APK"
-          "$APKSIGNER" verify --print-certs "$APK"
-
-      - name: Preparar artefatos e manifesto OTA
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="$(find android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
           mkdir -p release
-          cp "$APK" release/CineHUB-TV-v1.2.7.apk
+          cp "$APK" release/CineHUB-TV-v1.2.8.apk
           cp "$APK" release/CineHUB-TV.apk
-          sha256sum release/CineHUB-TV-v1.2.7.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
-          SHA="$(sha256sum release/CineHUB-TV-v1.2.7.apk | awk '{print $1}')"
+          sha256sum release/CineHUB-TV-v1.2.8.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
+          SHA="$(sha256sum release/CineHUB-TV-v1.2.8.apk | awk '{print $1}')"
           python3 - "$SHA" <<'PY'
           import json, sys
           from pathlib import Path
           sha = sys.argv[1]
           data = {
             "app": "CineHUB TV",
-            "version": "1.2.7",
-            "versionCode": 127,
-            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.7",
-            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.7/CineHUB-TV-v1.2.7.apk",
+            "version": "1.2.8",
+            "versionCode": 128,
+            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.8",
+            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.8/CineHUB-TV-v1.2.8.apk",
             "sha256": sha,
             "channel": "stable"
           }
-          Path("update.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          Path("update.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
           PY
 
-      - name: Publicar release CineHUB TV v1.2.7
+      - name: Publish test release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.7
-          target_commitish: main
-          name: CineHUB TV v1.2.7
+          tag_name: v1.2.8
+          name: CineHUB TV v1.2.8 — Teste de layout para TV
           body: |
-            Atualização do CineHUB TV com a interface extraída do pacote enviado e integrada à base Android TV estável 1.2.5.
-            - versionCode 127 / versionName 1.2.7
-            - Mantém o applicationId com.cinehub.tv para atualização sobre a instalação existente.
-            - APK validado com zipalign e apksigner antes da publicação.
+            Versão experimental para investigar o dimensionamento da interface em Android TV/WebView.
+            Foco: largura do viewport, fileiras horizontais e grades das telas internas.
+            Teste na televisão antes de considerar esta versão validada.
           files: |
-            release/CineHUB-TV-v1.2.7.apk
+            release/CineHUB-TV-v1.2.8.apk
             release/CineHUB-TV.apk
             release/SHA256SUMS.txt
-          generate_release_notes: true
-          overwrite_files: true
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: true
 
-      - name: Publicar manifesto OTA no repositório TV
+      - name: Update OTA manifest
         shell: bash
         run: |
           set -euo pipefail
-          if ! git diff --quiet -- update.json; then
-            echo "Manifesto já está no checkout; usando o valor recém-gerado."
-          fi
-          # Rebase seguro: a integração pode ter avançado main enquanto o APK compilava.
-          cp update.json /tmp/cinehub-update.json
-          git fetch origin main
-          git reset --hard origin/main
-          cp /tmp/cinehub-update.json update.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json
+          git add update.json android/CineHUB-TV/build.gradle.kts android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java android/CineHUB-TV/src/main/assets/cinehub/index.html android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt
           if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): atualizar manifesto OTA para v1.2.7"
+            git commit -m "chore(tv): prepare CineHUB TV 1.2.8 test build"
             git push origin HEAD:main
           fi
