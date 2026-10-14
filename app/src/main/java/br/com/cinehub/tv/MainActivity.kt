@@ -378,11 +378,16 @@ class MainActivity : AppCompatActivity() {
         content.addView(label("Buscar no CineHUB", 26, WHITE, true).apply {
             setPadding(d(0), d(12), d(0), d(8))
         })
-        content.addView(label("Pesquise no catálogo conectado. Nesta etapa, os resultados disponíveis são canais ao vivo; filmes e séries serão conectados às suas fontes nas próximas fases.", 14, MUTED, false).apply {
+        content.addView(label("Pesquise filmes, séries, animes, doramas e canais ao vivo em um só lugar.", 14, MUTED, false).apply {
             setPadding(d(0), d(0), d(0), d(14))
         })
+
+        val searchLine = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
         val search = EditText(this).apply {
-            hint = "Digite nome do canal ou categoria…"
+            hint = "Nome de filme, série ou canal…"
             setSingleLine(true)
             textSize = 16f
             setTextColor(WHITE)
@@ -393,34 +398,119 @@ class MainActivity : AppCompatActivity() {
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        content.addView(search, LinearLayout.LayoutParams(-1, d(54)))
-        val status = label("Preparando pesquisa…", 14, MUTED, false).apply {
-            setPadding(d(2), d(12), d(0), d(12))
+        searchLine.addView(search, LinearLayout.LayoutParams(0, d(54), 1f))
+        val searchButton = label("BUSCAR", 13, WHITE, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(d(18), d(12), d(18), d(12))
+            background = focusBackground(RED)
+            isFocusable = true
+            isFocusableInTouchMode = true
+        }
+        searchLine.addView(searchButton, LinearLayout.LayoutParams(-2, d(54)).apply {
+            marginStart = d(10)
+        })
+        content.addView(searchLine)
+
+        val status = label("Digite o que deseja encontrar e selecione Buscar.", 14, MUTED, false).apply {
+            setPadding(d(2), d(12), d(0), d(8))
         }
         content.addView(status)
-        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(results)
-        search.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                if (channels.isNotEmpty()) renderChannelRows(channels, results, status, s?.toString().orEmpty())
+
+        val channelResults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val movieResults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val seriesResults = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(channelResults)
+        content.addView(movieResults)
+        content.addView(seriesResults)
+
+        fun runSearch() {
+            val query = search.text.toString().trim()
+            if (query.isBlank()) {
+                status.text = "Digite um nome para pesquisar filmes, séries e canais."
+                channelResults.removeAllViews()
+                movieResults.removeAllViews()
+                seriesResults.removeAllViews()
+                return
             }
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
-        if (channels.isNotEmpty()) {
-            renderChannelRows(channels, results, status, search.text.toString())
-            return
-        }
-        io.execute {
-            try {
-                val loaded = CatalogRepository.loadChannels()
-                runOnUiThread {
-                    channels = loaded
-                    renderChannelRows(loaded, results, status, search.text.toString())
+            status.text = "Pesquisando “$query” em filmes, séries e canais…"
+            searchButton.isEnabled = false
+            io.execute {
+                var loadedChannels = channels
+                var channelError = false
+                var movieError = false
+                var seriesError = false
+                var movies: List<MediaItem> = emptyList()
+                var series: List<MediaItem> = emptyList()
+                try {
+                    if (loadedChannels.isEmpty()) loadedChannels = CatalogRepository.loadChannels()
+                } catch (_: Exception) {
+                    channelError = true
                 }
-            } catch (e: Exception) {
-                runOnUiThread { status.text = "Falha ao acessar o catálogo. Verifique a conexão e tente novamente." }
+                try {
+                    movies = OnlineCatalogRepository.search(query, "Filmes")
+                } catch (_: Exception) {
+                    movieError = true
+                }
+                try {
+                    series = OnlineCatalogRepository.search(query, "Séries")
+                } catch (_: Exception) {
+                    seriesError = true
+                }
+                val finalChannels = loadedChannels.filter {
+                    it.name.contains(query, ignoreCase = true) ||
+                        it.category.contains(query, ignoreCase = true)
+                }
+                runOnUiThread {
+                    if (currentSection != "Buscar") return@runOnUiThread
+                    channels = loadedChannels
+                    val total = finalChannels.size + movies.size + series.size
+                    status.text = when {
+                        total > 0 -> "$total resultado(s) encontrados"
+                        channelError && movieError && seriesError -> "Não foi possível acessar as fontes. Verifique a conexão e tente novamente."
+                        else -> "Nenhum resultado encontrado para “$query”. Tente outro termo."
+                    }
+                    searchButton.isEnabled = true
+
+                    channelResults.removeAllViews()
+                    if (finalChannels.isNotEmpty()) {
+                        channelResults.addView(label("CANAIS AO VIVO  •  ${finalChannels.size}", 19, WHITE, true).apply {
+                            setPadding(d(0), d(14), d(0), d(8))
+                        })
+                        renderChannelRows(finalChannels, channelResults, status, query)
+                    } else if (channelError) {
+                        channelResults.addView(label("Não foi possível pesquisar canais ao vivo agora.", 13, MUTED, false).apply {
+                            setPadding(d(0), d(6), d(0), d(6))
+                        })
+                    }
+
+                    movieResults.removeAllViews()
+                    if (movies.isNotEmpty()) {
+                        movieResults.addView(label("FILMES  •  ${movies.size}", 19, WHITE, true).apply {
+                            setPadding(d(0), d(16), d(0), d(8))
+                        })
+                        renderMediaCards(movies, movieResults)
+                    } else if (movieError) {
+                        movieResults.addView(label("Não foi possível pesquisar filmes agora.", 13, MUTED, false))
+                    }
+
+                    seriesResults.removeAllViews()
+                    if (series.isNotEmpty()) {
+                        seriesResults.addView(label("SÉRIES, ANIMES E DORAMAS  •  ${series.size}", 19, WHITE, true).apply {
+                            setPadding(d(0), d(16), d(0), d(8))
+                        })
+                        renderMediaCards(series, seriesResults)
+                    } else if (seriesError) {
+                        seriesResults.addView(label("Não foi possível pesquisar séries agora.", 13, MUTED, false))
+                    }
+                }
             }
+        }
+        searchButton.setOnClickListener { runSearch() }
+        search.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                runSearch()
+                true
+            } else false
         }
     }
 
