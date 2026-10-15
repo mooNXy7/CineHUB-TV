@@ -78,7 +78,6 @@ class PlayerActivity : AppCompatActivity() {
                                 .putString("continue_channel_name", channelTitle)
                                 .apply()
                         }
-                        savePlaybackHistory()
                         if (!historyResumeApplied) {
                             historyResumeApplied = true
                             val resumeAt = intent.getLongExtra(EXTRA_RESUME_POSITION, 0L)
@@ -86,6 +85,7 @@ class PlayerActivity : AppCompatActivity() {
                                 exo.seekTo(resumeAt)
                             }
                         }
+                        savePlaybackHistory()
                         historyHandler.removeCallbacks(historyTick)
                         historyHandler.postDelayed(historyTick, 15_000L)
                     } else if (playbackState == Player.STATE_BUFFERING) {
