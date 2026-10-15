@@ -135,8 +135,12 @@ class PlayerActivity : AppCompatActivity() {
             put("rating", intent.getStringExtra(EXTRA_RATING) ?: "—")
             put("description", intent.getStringExtra(EXTRA_DESCRIPTION) ?: "")
             put("language", intent.getStringExtra(EXTRA_LANGUAGE) ?: "")
-            put("countries", JSONArray(intent.getStringArrayListExtra(EXTRA_COUNTRIES) ?: arrayListOf()))
-            put("genreIds", JSONArray(intent.getIntegerArrayListExtra(EXTRA_GENRES) ?: arrayListOf()))
+            put("countries", JSONArray().apply {
+                intent.getStringArrayListExtra(EXTRA_COUNTRIES)?.forEach { put(it) }
+            })
+            put("genreIds", JSONArray().apply {
+                intent.getIntegerArrayListExtra(EXTRA_GENRES)?.forEach { put(it) }
+            })
             put("sources", JSONArray(sources))
             put("positionMs", current.currentPosition.coerceAtLeast(0L))
             put("updatedAt", System.currentTimeMillis())
