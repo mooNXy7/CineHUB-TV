@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private val favoriteNames = linkedSetOf<String>()
     private val mainHandler = Handler(android.os.Looper.getMainLooper())
     private var clockView: TextView? = null
+    private var otaUpdateManager: OtaUpdateManager? = null
     private val clockTick = object : Runnable { override fun run() { clockView?.text = SimpleDateFormat("HH:mm", Locale("pt", "BR")).apply { timeZone = TimeZone.getTimeZone("America/Sao_Paulo") }.format(Date()); mainHandler.postDelayed(this, 30_000L) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +58,9 @@ class MainActivity : AppCompatActivity() {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         favoriteNames.addAll(getSharedPreferences("cinehub-tv", MODE_PRIVATE).getStringSet("favorite_channels", emptySet()).orEmpty())
+        otaUpdateManager = OtaUpdateManager(this)
         buildHome()
+        mainHandler.postDelayed({ otaUpdateManager?.checkForUpdate() }, 2500L)
     }
 
     private fun buildHome() {
@@ -1079,8 +1082,12 @@ class MainActivity : AppCompatActivity() {
                 .apply()
             status.text = "Minha lista foi limpa."
         }
-        action("Sobre o CineHUB TV", "Versão nativa 0.2.0 • Interface Android/Kotlin • Player Media3") {
-            status.text = "CineHUB TV está em reconstrução nativa. Esta versão ainda é de desenvolvimento."
+        action("Verificar atualização do aplicativo", "Consulta a versão oficial e instala atualizações com verificação de integridade.") {
+            status.text = "Verificando atualizações…"
+            otaUpdateManager?.checkForUpdate(force = true) { message -> status.text = message }
+        }
+        action("Sobre o CineHUB TV", "Versão nativa 1.3.0 • Interface Android/Kotlin • Player Media3") {
+            status.text = "CineHUB TV Kotlin 1.3.0 • Atualizações OTA disponíveis nesta edição."
         }
     }
 
@@ -1389,7 +1396,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        otaUpdateManager?.resumeInstallIfReady()
+    }
+
     override fun onDestroy() {
+        otaUpdateManager?.close()
         mainHandler.removeCallbacks(clockTick)
         mainHandler.removeCallbacks(homeHeroTick)
         io.shutdownNow()
