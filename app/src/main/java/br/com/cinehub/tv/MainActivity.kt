@@ -573,8 +573,17 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener {
                 text = "⏳  Procurando fonte..."
                 isEnabled = false
+                val resolverSection = when {
+                    currentSection == "Animes" || item.language == "ja" -> "Animes"
+                    currentSection == "Doramas" || item.language == "ko" || item.countries.contains("KR") -> "Doramas"
+                    else -> "Séries"
+                }
                 io.execute {
-                    val sources = try { SaimoContentRepository.findDirectPlayback(item.title, item.type == "movie") } catch (_: Exception) { emptyList() }
+                    val sources = try {
+                        SaimoVodRepository.findDirectPlayback(
+                            this@MainActivity, item.title, item.type == "movie", resolverSection, item.id
+                        )
+                    } catch (_: Exception) { emptyList() }
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         isEnabled = true
@@ -598,6 +607,61 @@ class MainActivity : AppCompatActivity() {
         actions.addView(watch)
         actions.addView(favorite, LinearLayout.LayoutParams(-2, -2).apply { marginStart = d(10) })
         info.addView(actions)
+
+        // Séries, animes e doramas usam os episódios publicados no acervo Saimo.
+        // A lista é carregada em segundo plano e só os episódios disponíveis são exibidos.
+        if (item.type != "movie") {
+            val episodeArea = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = View.GONE
+                setPadding(0, d(14), 0, 0)
+            }
+            info.addView(episodeArea, LinearLayout.LayoutParams(-1, -2))
+            val resolverSection = when {
+                currentSection == "Animes" || item.language == "ja" -> "Animes"
+                currentSection == "Doramas" || item.language == "ko" || item.countries.contains("KR") -> "Doramas"
+                else -> "Séries"
+            }
+            io.execute {
+                val episodes = try {
+                    SaimoVodRepository.findEpisodes(this@MainActivity, item.title, resolverSection, item.id)
+                } catch (_: Exception) { emptyList() }
+                runOnUiThread {
+                    if (isFinishing || isDestroyed || episodes.isEmpty()) return@runOnUiThread
+                    episodeArea.visibility = View.VISIBLE
+                    episodeArea.addView(label("EPISÓDIOS DISPONÍVEIS", 12, RED, true).apply {
+                        setPadding(0, 0, 0, d(8))
+                    })
+                    val episodeScroll = android.widget.HorizontalScrollView(this).apply {
+                        isHorizontalScrollBarEnabled = false
+                        descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                    }
+                    val episodeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                    episodes.take(60).forEach { episode ->
+                        val episodeButton = label(episode.label, 12, WHITE, true).apply {
+                            setPadding(d(12), d(10), d(12), d(10))
+                            background = focusBackground(PANEL)
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+                            contentDescription = "Assistir ${item.title}, temporada ${episode.season}, episódio ${episode.number}"
+                            setOnClickListener {
+                                if (episode.sources.isEmpty()) return@setOnClickListener
+                                startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                                    putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(episode.sources))
+                                    putExtra(PlayerActivity.EXTRA_URL, episode.sources.first())
+                                    putExtra(PlayerActivity.EXTRA_TITLE, "${item.title} • ${episode.label}")
+                                })
+                            }
+                        }
+                        episodeRow.addView(episodeButton, LinearLayout.LayoutParams(-2, -2).apply {
+                            marginEnd = d(8)
+                        })
+                    }
+                    episodeScroll.addView(episodeRow)
+                    episodeArea.addView(episodeScroll, LinearLayout.LayoutParams(-1, -2))
+                }
+            }
+        }
         panel.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setView(panel)
