@@ -3,7 +3,7 @@ name: CineHUB TV Kotlin — Signed OTA Release
 on:
   push:
     branches:
-      - release/kotlin-ota-v1.3.0
+      - release/kotlin-ota-v1.3.1
   workflow_dispatch:
 
 permissions:
