@@ -245,3 +245,35 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
     grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
   }
 }
+
+
+/* CineHUB TV — acabamento dos cards e ficha de conteúdo */
+.media-card{position:relative;border-radius:15px;overflow:hidden;isolation:isolate;clip-path:inset(0 round 15px);background:#141416;border:1px solid rgba(255,255,255,.12)}
+.media-card-open{display:flex;flex-direction:column;width:100%;height:100%;padding:0;margin:0;border:0;border-radius:inherit;overflow:hidden;background:transparent;color:inherit;text-align:left;appearance:none;cursor:pointer}
+.media-poster{position:relative;width:100%;aspect-ratio:2/3;overflow:hidden;border-radius:14px 14px 0 0;background:linear-gradient(145deg,#241013,#090909);flex:0 0 auto}
+.media-poster img{display:block;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.media-meta{min-width:0;background:linear-gradient(180deg,#18181a,#121214);border-radius:0 0 14px 14px}
+.favorite-button{position:absolute;z-index:4;top:10px;right:10px;display:grid;place-items:center;width:42px;height:42px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.24);background:rgba(7,7,8,.82);color:#fff;font-size:25px;line-height:1;box-shadow:0 4px 16px rgba(0,0,0,.45);backdrop-filter:blur(10px);cursor:pointer;transition:transform .18s ease,background .18s ease,border-color .18s ease,color .18s ease}
+.favorite-button:focus-visible,.favorite-button:hover{outline:none;border-color:#e50914;background:rgba(95,0,8,.94);transform:scale(1.08)}
+.favorite-button.is-favorite{color:#ff3544;border-color:rgba(229,9,20,.72);background:rgba(60,0,5,.9)}
+.media-card:focus-within,.media-card:focus-visible{outline:2px solid #e50914;outline-offset:3px}
+.details-dialog{width:min(1000px,94vw);max-width:1000px;max-height:90vh;padding:0;border:1px solid rgba(255,255,255,.13);border-radius:18px;color:#f5f5f5;background:#101012;box-shadow:0 24px 90px rgba(0,0,0,.8);overflow:auto}
+.details-dialog::backdrop{background:rgba(0,0,0,.82);backdrop-filter:blur(8px)}
+.details-dialog .dialog-inner{padding:clamp(18px,3vw,32px)}
+.details-layout{display:grid;grid-template-columns:minmax(160px,280px) minmax(0,1fr);gap:clamp(20px,3vw,34px);align-items:start}
+.details-poster{display:block;width:100%;max-height:65vh;aspect-ratio:2/3;object-fit:cover;border-radius:14px;box-shadow:0 16px 45px rgba(0,0,0,.5);background:#19191b}
+.details-poster-fallback{display:grid;place-items:center;color:#ff5963;font-weight:900;letter-spacing:.12em;background:linear-gradient(145deg,#321015,#0b0b0d)}
+.details-copy{min-width:0}
+.details-copy h3{font-size:clamp(24px,3vw,42px);line-height:1.12;letter-spacing:-.035em;margin:7px 0 12px}
+.details-meta{color:#ffb5b9;font-size:14px;line-height:1.6;margin:0 0 18px}
+.details-overview{font-size:clamp(14px,1.2vw,17px);line-height:1.75;color:rgba(255,255,255,.88);white-space:pre-line}
+.details-actions{display:flex;flex-wrap:wrap;gap:12px;margin:22px 0 12px}
+.details-actions button{min-height:48px;padding:0 20px;border-radius:10px;font-size:14px;font-weight:800}
+.details-actions .details-watch{background:#e50914;color:white;border:1px solid #e50914}
+.details-actions .details-watch:focus-visible,.details-actions .details-watch:hover{background:#ff202d;outline:2px solid rgba(255,255,255,.75);outline-offset:2px}
+.details-actions .details-favorite{background:#202023;color:#fff;border:1px solid rgba(255,255,255,.2)}
+.details-actions .details-favorite.is-favorite{color:#ff5963;border-color:rgba(229,9,20,.65);background:rgba(229,9,20,.13)}
+.details-actions button:focus-visible,.details-actions button:hover{outline:2px solid #e50914;outline-offset:2px}
+.details-source{line-height:1.5}
+@media(max-width:650px){.details-layout{grid-template-columns:100px minmax(0,1fr);gap:14px}.details-poster{max-height:230px}.details-copy h3{font-size:22px}.details-overview{font-size:13px;line-height:1.6}.details-actions{flex-direction:column;align-items:stretch}.details-actions button{width:100%}.favorite-button{width:36px;height:36px;font-size:22px;top:7px;right:7px}}
+@media(prefers-reduced-motion:reduce){.favorite-button,.media-card,.media-poster img{transition:none}}
