@@ -11,8 +11,8 @@ android {
         applicationId = "br.com.cinehub.tv"
         minSdk = 23
         targetSdk = 28
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 130
+        versionName = "1.3.0"
     }
 
     compileOptions {
@@ -20,6 +20,28 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    // Release signing is enabled only when the CI signing-key environment is present.
+    // Debug builds remain independent from release credentials.
+    val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
+    signingConfigs {
+        if (!releaseStorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseStorePath)
+                storePassword = System.getenv("CINEHUB_TV_KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("CINEHUB_TV_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("CINEHUB_TV_KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!releaseStorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
 }
 
 dependencies {
