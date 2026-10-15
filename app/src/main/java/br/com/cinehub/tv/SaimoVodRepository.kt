@@ -12,7 +12,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
 /**
- * Leitor do acervo VOD publicado pelo SaimoPlayer.
+ * Leitor do acervo VOD conectado ao CineHUB TV.
  * Lê arquivos sob demanda e mantém cache local por seis horas, sem exigir
  * downloads do catálogo inteiro nem apagar uma cópia válida quando a rede cai.
  */
@@ -71,7 +71,7 @@ object SaimoVodRepository {
     data class CatalogTitle(val title: String, val section: String, val type: String)
 
     /**
-     * Lista títulos que realmente existem nos índices públicos do Saimo.
+     * Lista títulos existentes nos índices conectados ao CineHUB TV.
      * Os arquivos são lidos em paralelo com concorrência limitada; nunca são
      * baixados todos os vídeos nem bloqueada a thread da interface.
      */
