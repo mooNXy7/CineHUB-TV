@@ -1,0 +1,9 @@
+{
+  "app": "CineHUB TV Kotlin",
+  "version": "1.3.0",
+  "versionCode": 130,
+  "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/kotlin-v1.3.0",
+  "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/kotlin-v1.3.0/CineHUB-TV-Kotlin-v1.3.0.apk",
+  "sha256": "bc67756276fbf8c719d7b70af9ef67eecbf4b9d27a5f40c56660fc7c83873bab",
+  "channel": "kotlin-preview"
+}
