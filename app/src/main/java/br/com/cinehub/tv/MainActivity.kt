@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var content: LinearLayout
     private val sections = listOf("Início", "Ao vivo", "Filmes", "Séries", "Animes", "Doramas", "Rádio", "Minha lista", "Buscar", "Ajustes")
     private val io = Executors.newSingleThreadExecutor()
+    private val catalogIo = Executors.newSingleThreadExecutor()
     private val metadataIo = Executors.newFixedThreadPool(3)
     private var channels: List<TvChannel> = emptyList()
     private var currentSection = "Início"
@@ -446,7 +447,7 @@ class MainActivity : AppCompatActivity() {
                         status.text = "Carregando títulos do acervo Saimo em segundo plano…"
                         renderMediaShelves(section, online, emptyList(), shelves)
                     }
-                    io.execute {
+                    catalogIo.execute {
                         val local = runCatching {
                             SaimoVodRepository.catalogTitles(this@MainActivity, section, 80)
                         }.getOrDefault(emptyList())
@@ -479,7 +480,7 @@ class MainActivity : AppCompatActivity() {
                         status.text = "Não foi possível conectar ao catálogo online. Carregando o índice local…"
                     }
                     if (query.isBlank()) {
-                        io.execute {
+                        catalogIo.execute {
                             val local = runCatching { SaimoVodRepository.catalogTitles(this@MainActivity, section, 80) }.getOrDefault(emptyList())
                             val localItems = local.map { entry ->
                                 MediaItem("saimo-${section.lowercase(Locale.ROOT)}-${entry.title.hashCode()}",
