@@ -316,6 +316,65 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showContinueWatching() {
+        val raw = getSharedPreferences("cinehub-tv", MODE_PRIVATE).getString("continue_media_items", "[]") ?: "[]"
+        val records = linkedMapOf<String, org.json.JSONObject>()
+        val items = try {
+            val array = org.json.JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                val obj = array.optJSONObject(index) ?: return@mapNotNull null
+                val item = mediaItemFromJson(obj) ?: return@mapNotNull null
+                records[item.id] = obj
+                item
+            }.sortedByDescending { records[it.id]?.optLong("updatedAt", 0L) ?: 0L }.take(20)
+        } catch (_: Exception) { emptyList() }
+        if (items.isEmpty()) return
+        content.addView(label("Continuar assistindo", 20, WHITE, true).apply {
+            setPadding(d(2), d(14), 0, d(7))
+        })
+        renderMediaCards(items, content, "Seus últimos conteúdos") { item ->
+            val record = records[item.id] ?: return@renderMediaCards
+            val sourcesJson = record.optJSONArray("sources") ?: org.json.JSONArray()
+            val sources = (0 until sourcesJson.length()).mapNotNull { sourcesJson.optString(it).takeIf { url -> url.startsWith("http://") || url.startsWith("https://") } }
+            if (sources.isEmpty()) {
+                showMediaDetails(item)
+            } else {
+                launchMediaPlayback(item, sources, record.optString("playbackTitle", item.title),
+                    item.id, record.optLong("positionMs", 0L))
+            }
+        }
+    }
+
+    private fun launchMediaPlayback(
+        item: MediaItem,
+        sources: List<String>,
+        playbackTitle: String = item.title,
+        historyId: String = item.id,
+        resumePosition: Long = 0L
+    ) {
+        if (sources.isEmpty()) {
+            showInfo("Fonte não encontrada", "Não encontramos uma fonte de reprodução para este conteúdo.")
+            return
+        }
+        startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+            putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(sources))
+            putExtra(PlayerActivity.EXTRA_URL, sources.first())
+            putExtra(PlayerActivity.EXTRA_TITLE, item.title)
+            putExtra(PlayerActivity.EXTRA_PLAYBACK_TITLE, playbackTitle)
+            putExtra(PlayerActivity.EXTRA_MEDIA_ID, historyId)
+            putExtra(PlayerActivity.EXTRA_POSTER, item.poster ?: "")
+            putExtra(PlayerActivity.EXTRA_BACKDROP, item.backdrop ?: "")
+            putExtra(PlayerActivity.EXTRA_MEDIA_TYPE, item.type)
+            putExtra(PlayerActivity.EXTRA_YEAR, item.year)
+            putExtra(PlayerActivity.EXTRA_RATING, item.rating)
+            putExtra(PlayerActivity.EXTRA_DESCRIPTION, item.description)
+            putExtra(PlayerActivity.EXTRA_LANGUAGE, item.language)
+            putStringArrayListExtra(PlayerActivity.EXTRA_COUNTRIES, ArrayList(item.countries))
+            putIntegerArrayListExtra(PlayerActivity.EXTRA_GENRES, ArrayList(item.genreIds))
+            putExtra(PlayerActivity.EXTRA_RESUME_POSITION, resumePosition)
+        })
+    }
+
     private fun showMediaSection(section: String) {
         content.removeAllViews()
         val headline = when (section) {
@@ -473,7 +532,12 @@ class MainActivity : AppCompatActivity() {
         if (container.childCount == 0) container.addView(label("Nenhum título foi encontrado nesta categoria. Tente atualizar mais tarde.", 14, MUTED, false))
     }
 
-    private fun renderMediaCards(items: List<MediaItem>, container: LinearLayout) {
+    private fun renderMediaCards(
+        items: List<MediaItem>,
+        container: LinearLayout,
+        heading: String? = null,
+        onItemClick: ((MediaItem) -> Unit)? = null
+    ) {
         container.removeAllViews()
         if (items.isEmpty()) {
             container.addView(label("Quando o catálogo responder, os títulos aparecerão aqui com suas capas.", 14, MUTED, false).apply {
@@ -481,7 +545,7 @@ class MainActivity : AppCompatActivity() {
             })
             return
         }
-        container.addView(label(if (currentSection == "Filmes") "Em destaque" else "Descobertas para você", 20, WHITE, true).apply {
+        container.addView(label(heading ?: if (currentSection == "Filmes") "Em destaque" else "Descobertas para você", 20, WHITE, true).apply {
             setPadding(d(0), d(10), d(0), d(8))
         })
         val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
@@ -544,7 +608,7 @@ class MainActivity : AppCompatActivity() {
                     view.scaleY = if (focused) 1.015f else 1f
                     view.elevation = if (focused) d(8).toFloat() else 0f
                 }
-                setOnClickListener { showMediaDetails(item) }
+                setOnClickListener { if (onItemClick != null) onItemClick.invoke(item) else showMediaDetails(item) }
             }
             row.addView(card, LinearLayout.LayoutParams(d(164), d(278)).apply { marginEnd = d(14) })
         }
@@ -555,13 +619,59 @@ class MainActivity : AppCompatActivity() {
     private fun isMediaFavorite(item: MediaItem): Boolean =
         getSharedPreferences("cinehub-tv", MODE_PRIVATE).getStringSet("favorite_media", emptySet()).orEmpty().contains(item.id)
 
+    private fun mediaItemToJson(item: MediaItem): org.json.JSONObject = org.json.JSONObject().apply {
+        put("id", item.id); put("title", item.title); put("type", item.type)
+        put("poster", item.poster ?: ""); put("backdrop", item.backdrop ?: "")
+        put("year", item.year); put("rating", item.rating); put("description", item.description)
+        put("genreIds", org.json.JSONArray(item.genreIds.toList()))
+        put("language", item.language); put("countries", org.json.JSONArray(item.countries.toList()))
+    }
+
+    private fun mediaItemFromJson(obj: org.json.JSONObject): MediaItem? {
+        val id = obj.optString("id").takeIf { it.isNotBlank() } ?: return null
+        val title = obj.optString("title").takeIf { it.isNotBlank() } ?: return null
+        val genresJson = obj.optJSONArray("genreIds")
+        val genres = if (genresJson == null) emptySet() else (0 until genresJson.length()).map { genresJson.optInt(it) }.toSet()
+        val countriesJson = obj.optJSONArray("countries")
+        val countries = if (countriesJson == null) emptySet() else (0 until countriesJson.length()).map { countriesJson.optString(it) }.toSet()
+        return MediaItem(id, title, obj.optString("type", "movie"),
+            obj.optString("poster").takeIf { it.startsWith("http") },
+            obj.optString("backdrop").takeIf { it.startsWith("http") },
+            obj.optString("year"), obj.optString("rating", "—"), obj.optString("description"),
+            genres, obj.optString("language"), countries)
+    }
+
+    private fun readSavedFavoriteMedia(): List<MediaItem> {
+        val raw = getSharedPreferences("cinehub-tv", MODE_PRIVATE).getString("favorite_media_items", "[]") ?: "[]"
+        return try {
+            val array = org.json.JSONArray(raw)
+            (0 until array.length()).mapNotNull { mediaItemFromJson(array.optJSONObject(it) ?: return@mapNotNull null) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    private fun saveMediaFavoriteSnapshot(item: MediaItem, favorite: Boolean) {
+        val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+        val saved = readSavedFavoriteMedia().filterNot { it.id == item.id }.toMutableList()
+        if (favorite) saved.add(0, item)
+        val json = org.json.JSONArray()
+        saved.distinctBy { it.id }.take(300).forEach { json.put(mediaItemToJson(it)) }
+        prefs.edit().putString("favorite_media_items", json.toString()).apply()
+    }
+
     private fun toggleMediaFavorite(item: MediaItem) {
         val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
         val saved = prefs.getStringSet("favorite_media", emptySet()).orEmpty().toMutableSet()
-        if (!saved.add(item.id)) saved.remove(item.id)
-        prefs.edit().putStringSet("favorite_media", saved).apply()
+        val isNowFavorite = if (saved.contains(item.id)) {
+            saved.remove(item.id)
+            false
+        } else {
+            saved.add(item.id)
+            true
+        }
+        prefs.edit().putStringSet("favorite_media", saved.toSet()).apply()
+        saveMediaFavoriteSnapshot(item, isNowFavorite)
         android.widget.Toast.makeText(this,
-            if (saved.contains(item.id)) "Adicionado à Minha Lista" else "Removido da Minha Lista",
+            if (isNowFavorite) "Adicionado à Minha Lista" else "Removido da Minha Lista",
             android.widget.Toast.LENGTH_SHORT).show()
     }
 
@@ -665,11 +775,7 @@ class MainActivity : AppCompatActivity() {
                         isEnabled = true
                         text = "▶  Assistir"
                         if (sources.isNotEmpty()) {
-                            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
-                                putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(sources))
-                                putExtra(PlayerActivity.EXTRA_URL, sources.first())
-                                putExtra(PlayerActivity.EXTRA_TITLE, item.title)
-                            })
+                            launchMediaPlayback(item, sources)
                         } else {
                             androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
                                 .setTitle("Fonte não encontrada")
@@ -722,11 +828,10 @@ class MainActivity : AppCompatActivity() {
                             contentDescription = "Assistir ${item.title}, temporada ${episode.season}, episódio ${episode.number}"
                             setOnClickListener {
                                 if (episode.sources.isEmpty()) return@setOnClickListener
-                                startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
-                                    putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(episode.sources))
-                                    putExtra(PlayerActivity.EXTRA_URL, episode.sources.first())
-                                    putExtra(PlayerActivity.EXTRA_TITLE, "${item.title} • ${episode.label}")
-                                })
+                                launchMediaPlayback(
+                                    item, episode.sources, "${item.title} • ${episode.label}",
+                                    "${item.id}::${episode.season}:${episode.number}:${episode.language}"
+                                )
                             }
                         }
                         episodeRow.addView(episodeButton, LinearLayout.LayoutParams(-2, -2).apply {
@@ -766,6 +871,7 @@ class MainActivity : AppCompatActivity() {
         content.addView(channelResults)
         io.execute {
             val media = mutableListOf<MediaItem>()
+            media.addAll(readSavedFavoriteMedia())
             val savedIds = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
                 .getStringSet("favorite_media", emptySet()).orEmpty()
             if (savedIds.isNotEmpty()) {
