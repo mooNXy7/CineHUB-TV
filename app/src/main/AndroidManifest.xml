@@ -8,8 +8,8 @@
     <application
         android:allowBackup="false"
         android:label="CineHUB TV"
-        android:icon="@drawable/ic_cinehub"
-        android:roundIcon="@drawable/ic_cinehub"
+        android:icon="@drawable/cinehub_icon"
+        android:roundIcon="@drawable/cinehub_icon"
         android:theme="@style/Theme.CineHUB"
         android:usesCleartextTraffic="true">
         <provider
