@@ -8,6 +8,8 @@ import java.net.URLEncoder
 import java.text.Normalizer
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 /**
  * Leitor do acervo VOD publicado pelo SaimoPlayer.
@@ -64,6 +66,72 @@ object SaimoVodRepository {
             if (episodes.isNotEmpty()) return episodes
         }
         return seriesEpisodes(context, title, sourceBases)
+    }
+
+    data class CatalogTitle(val title: String, val section: String, val type: String)
+
+    /**
+     * Lista títulos que realmente existem nos índices públicos do Saimo.
+     * Os arquivos são lidos em paralelo com concorrência limitada; nunca são
+     * baixados todos os vídeos nem bloqueada a thread da interface.
+     */
+    fun catalogTitles(context: Context, section: String, limit: Int = 80): List<CatalogTitle> {
+        if (limit <= 0) return emptyList()
+        val normalizedSection = when (section.lowercase(Locale.ROOT)) {
+            "filmes" -> "Filmes"
+            "animes" -> "Animes"
+            "doramas" -> "Doramas"
+            else -> "Séries"
+        }
+        val type = if (normalizedSection == "Filmes") "movie" else "tv"
+        val found = linkedMapOf<String, CatalogTitle>()
+        fun add(title: String) {
+            val clean = title.trim().substringBeforeLast("\\t").trim()
+            if (clean.isBlank() || clean.startsWith("@") || clean.length > 180) return
+            val key = normalize(stripYear(clean))
+            if (key.isBlank()) return
+            found.putIfAbsent(key, CatalogTitle(clean, normalizedSection, type))
+        }
+
+        when (normalizedSection) {
+            "Animes", "Doramas" -> {
+                val file = if (normalizedSection == "Animes") "redeflix/links-animes.txt" else "redeflix/links-doramas.txt"
+                val text = fileText(context, file) ?: return emptyList()
+                text.lineSequence().forEach { line ->
+                    if (line.startsWith("@")) {
+                        val fields = line.drop(1).split('\\t')
+                        add(fields.firstOrNull().orEmpty())
+                    }
+                }
+            }
+            else -> {
+                val letters = ('A'..'Z').map { it.toString() } + "#"
+                val executor = Executors.newFixedThreadPool(4)
+                try {
+                    val tasks = letters.map { letter ->
+                        Callable {
+                            val file = if (normalizedSection == "Filmes") "filmes-$letter.txt" else "series-$letter.txt"
+                            val text = fileText(context, file).orEmpty()
+                            text.lineSequence().mapNotNull { line ->
+                                if (line.isBlank() || line.startsWith("@") || line.startsWith("#")) return@mapNotNull null
+                                val fields = line.split('\\t')
+                                val title = fields.firstOrNull()?.trim().orEmpty()
+                                if (title.isBlank()) null else title
+                            }.toList()
+                        }
+                    }
+                    executor.invokeAll(tasks).forEach { future ->
+                        future.get().forEach(::add)
+                        if (found.size >= limit) break
+                    }
+                } catch (_: Exception) {
+                    // Preserve the titles collected from any valid index files.
+                } finally {
+                    executor.shutdownNow()
+                }
+            }
+        }
+        return found.values.take(limit)
     }
 
     private fun movieByTmdbId(context: Context, id: String, sourceBases: Map<Int, String>): List<String> {
