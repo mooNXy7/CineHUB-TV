@@ -202,7 +202,6 @@ object SaimoVodRepository {
     }
 
     private fun fileText(context: Context, path: String): String? {
-        memory[path]?.let { return it }
         val directory = File(context.cacheDir, "saimo-vod").apply { mkdirs() }
         val local = File(directory, path.replace("#", "hash").replace('/', '_'))
         if (local.exists() && local.length() > 0L &&
@@ -229,7 +228,12 @@ object SaimoVodRepository {
             } finally { connection.disconnect() }
         } catch (_: Exception) { null }
         val text = downloaded?.takeIf { it.isNotBlank() } ?: stale ?: return null
-        if (downloaded != null && downloaded.isNotBlank()) runCatching { local.writeText(downloaded, Charsets.UTF_8) }
+        if (downloaded != null && downloaded.isNotBlank()) {
+            runCatching { local.writeText(downloaded, Charsets.UTF_8) }
+        } else if (stale != null) {
+            // A temporary outage should not trigger another failed request for every card.
+            runCatching { local.setLastModified(System.currentTimeMillis()) }
+        }
         memory[path] = text
         return text
     }
