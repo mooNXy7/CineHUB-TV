@@ -38,7 +38,7 @@ class PlayerActivity : AppCompatActivity() {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
-        channelTitle = intent.getStringExtra(EXTRA_TITLE) ?: "CineHUB TV"
+        channelTitle = intent.getStringExtra(EXTRA_PLAYBACK_TITLE) ?: intent.getStringExtra(EXTRA_TITLE) ?: "CineHUB TV"
         val suppliedSources = intent.getStringArrayListExtra(EXTRA_SOURCES)?.toList().orEmpty()
         val legacyUrl = intent.getStringExtra(EXTRA_URL)
         sources = (suppliedSources + listOfNotNull(legacyUrl))
