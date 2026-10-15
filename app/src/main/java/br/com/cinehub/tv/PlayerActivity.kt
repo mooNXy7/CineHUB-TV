@@ -73,9 +73,11 @@ class PlayerActivity : AppCompatActivity() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) {
                         status.visibility = View.GONE
-                        getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
-                            .putString("continue_channel_name", channelTitle)
-                            .apply()
+                        if (intent.getStringExtra(EXTRA_MEDIA_ID).isNullOrBlank()) {
+                            getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
+                                .putString("continue_channel_name", channelTitle)
+                                .apply()
+                        }
                         savePlaybackHistory()
                         if (!historyResumeApplied) {
                             historyResumeApplied = true
