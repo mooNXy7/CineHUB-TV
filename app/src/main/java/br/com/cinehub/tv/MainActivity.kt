@@ -416,42 +416,57 @@ class MainActivity : AppCompatActivity() {
         content.addView(shelves)
 
         fun runSearch(query: String) {
-            status.text = if (query.isBlank()) "Atualizando catálogo e categorias…" else "Buscando “$query”…"
+            status.text = if (query.isBlank()) "Carregando catálogo online…" else "Buscando “$query”…"
             searchButton.isEnabled = false
             io.execute {
                 try {
                     val online = if (query.isBlank()) OnlineCatalogRepository.feed(section)
                         else OnlineCatalogRepository.search(query, section)
-                    val local = if (query.isBlank()) SaimoVodRepository.catalogTitles(this@MainActivity, section, 80)
-                        else emptyList()
-                    val normalized = { value: String ->
-                        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
-                            .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
-                    }
-                    val onlineByTitle = online.associateBy { normalized(it.title) }
-                    val localItems = local.map { entry ->
-                        val match = onlineByTitle[normalized(entry.title)]
-                        match ?: MediaItem(
-                            id = "saimo-${section.lowercase(Locale.ROOT)}-${normalized(entry.title).replace(' ', '-')}",
-                            title = entry.title,
-                            type = if (section == "Filmes") "movie" else "tv",
-                            poster = null, backdrop = null, year = "", rating = "—", description = "",
-                            genreIds = emptySet(), language = "", countries = emptySet()
-                        )
-                    }.distinctBy { normalized(it.title) }
-                    runOnUiThread {
-                        if (currentSection != section) return@runOnUiThread
-                        searchButton.isEnabled = true
-                        if (query.isNotBlank()) {
+                    if (query.isNotBlank()) {
+                        runOnUiThread {
+                            if (currentSection != section) return@runOnUiThread
+                            searchButton.isEnabled = true
                             shelves.removeAllViews()
                             shelves.visibility = View.GONE
                             results.visibility = View.VISIBLE
                             status.text = if (online.isEmpty()) "Nenhum resultado encontrado para “$query”." else "${online.size} resultados encontrados"
                             renderMediaCards(online, results, "Resultados da busca")
-                        } else {
-                            results.removeAllViews()
-                            results.visibility = View.GONE
-                            shelves.visibility = View.VISIBLE
+                        }
+                        return@execute
+                    }
+
+                    // Renderiza as capas online imediatamente; o índice local do Saimo
+                    // é carregado em uma segunda tarefa para não segurar a interface.
+                    runOnUiThread {
+                        if (currentSection != section) return@runOnUiThread
+                        searchButton.isEnabled = true
+                        results.removeAllViews()
+                        results.visibility = View.GONE
+                        shelves.visibility = View.VISIBLE
+                        status.text = "Carregando títulos do acervo Saimo em segundo plano…"
+                        renderMediaShelves(section, online, emptyList(), shelves)
+                    }
+                    io.execute {
+                        val local = runCatching {
+                            SaimoVodRepository.catalogTitles(this@MainActivity, section, 80)
+                        }.getOrDefault(emptyList())
+                        val normalized = { value: String ->
+                            Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+                                .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
+                        }
+                        val onlineByTitle = online.associateBy { normalized(it.title) }
+                        val localItems = local.map { entry ->
+                            val match = onlineByTitle[normalized(entry.title)]
+                            match ?: MediaItem(
+                                id = "saimo-${section.lowercase(Locale.ROOT)}-${normalized(entry.title).replace(' ', '-')}",
+                                title = entry.title,
+                                type = if (section == "Filmes") "movie" else "tv",
+                                poster = null, backdrop = null, year = "", rating = "—", description = "",
+                                genreIds = emptySet(), language = "", countries = emptySet()
+                            )
+                        }.distinctBy { normalized(it.title) }
+                        runOnUiThread {
+                            if (currentSection != section || isFinishing || isDestroyed) return@runOnUiThread
                             status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
                             renderMediaShelves(section, online, localItems, shelves)
                             enrichCatalogMetadata(section, localItems, online, shelves)
@@ -461,17 +476,20 @@ class MainActivity : AppCompatActivity() {
                     runOnUiThread {
                         if (currentSection != section) return@runOnUiThread
                         searchButton.isEnabled = true
-                        status.text = "Não foi possível atualizar o catálogo online. O índice local continuará disponível quando a conexão voltar."
-                        if (query.isBlank()) {
-                            io.execute {
-                                val local = runCatching { SaimoVodRepository.catalogTitles(this@MainActivity, section, 80) }.getOrDefault(emptyList())
-                                val localItems = local.map { entry ->
-                                    MediaItem("saimo-${section.lowercase(Locale.ROOT)}-${entry.title.hashCode()}",
-                                        entry.title, if (section == "Filmes") "movie" else "tv", null, null, "", "—", "",
-                                        emptySet(), "", emptySet())
-                                }
-                                runOnUiThread {
-                                    if (currentSection == section) renderMediaShelves(section, emptyList(), localItems, shelves)
+                        status.text = "Não foi possível conectar ao catálogo online. Carregando o índice local…"
+                    }
+                    if (query.isBlank()) {
+                        io.execute {
+                            val local = runCatching { SaimoVodRepository.catalogTitles(this@MainActivity, section, 80) }.getOrDefault(emptyList())
+                            val localItems = local.map { entry ->
+                                MediaItem("saimo-${section.lowercase(Locale.ROOT)}-${entry.title.hashCode()}",
+                                    entry.title, if (section == "Filmes") "movie" else "tv", null, null, "", "—", "",
+                                    emptySet(), "", emptySet())
+                            }
+                            runOnUiThread {
+                                if (currentSection == section) {
+                                    renderMediaShelves(section, emptyList(), localItems, shelves)
+                                    status.text = "${localItems.size} títulos do acervo Saimo carregados"
                                 }
                             }
                         }
