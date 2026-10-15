@@ -34,6 +34,12 @@ android {
             }
         }
     }
+    // This APK is distributed directly, not through Google Play. Keep the tested TV targetSdk
+    // unchanged and suppress only Play-store target-SDK policy lint for sideloaded releases.
+    lint {
+        disable += "ExpiredTargetSdkVersion"
+    }
+
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
