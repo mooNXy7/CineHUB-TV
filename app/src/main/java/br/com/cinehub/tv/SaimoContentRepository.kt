@@ -1,5 +1,7 @@
 package br.com.cinehub.tv
 
+import android.content.Context
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.text.Normalizer
@@ -15,8 +17,31 @@ object SaimoContentRepository {
     private const val BASE = "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/"
     private val urlRegex = Regex("""https?://[^\s|,<>"]+""", RegexOption.IGNORE_CASE)
 
-    fun loadRadios(): List<RadioStation> {
-        val raw = download("vod/radios.txt")
+    fun loadRadios(context: Context): List<RadioStation> {
+        val cachedFile = File(context.cacheDir, "saimo-radios.txt")
+        val cachedText = runCatching {
+            cachedFile.takeIf { it.exists() && it.length() > 0L }?.readText(Charsets.UTF_8)
+        }.getOrNull()
+        val cacheIsFresh = cachedFile.exists() &&
+            System.currentTimeMillis() - cachedFile.lastModified() < 6 * 60 * 60 * 1000L
+        val raw = if (cacheIsFresh && !cachedText.isNullOrBlank()) {
+            cachedText
+        } else {
+            val downloaded = runCatching { download("vod/radios.txt") }.getOrNull()
+            val parsedCount = downloaded?.lineSequence()?.count { line ->
+                val parts = line.trim().split("|")
+                parts.size >= 2 && parts[0].isNotBlank() && parts[1].startsWith("http")
+            } ?: 0
+            if (!downloaded.isNullOrBlank() && parsedCount >= 10) {
+                runCatching { cachedFile.writeText(downloaded, Charsets.UTF_8) }
+                downloaded
+            } else {
+                // Keep the last usable list when GitHub is temporarily unavailable.
+                cachedText.orEmpty().also {
+                    if (it.isNotBlank()) runCatching { cachedFile.setLastModified(System.currentTimeMillis()) }
+                }
+            }
+        }
         val result = mutableListOf<RadioStation>()
         raw.lineSequence().forEach { line ->
             val parts = line.trim().split("|")
@@ -29,7 +54,8 @@ object SaimoContentRepository {
                 }
             }
         }
-        return result.distinctBy { normalize(it.name) }.sortedBy { it.name.lowercase(Locale("pt", "BR")) }
+        return result.distinctBy { normalize(it.name) }
+            .sortedBy { it.name.lowercase(Locale("pt", "BR")) }
     }
 
     /**
