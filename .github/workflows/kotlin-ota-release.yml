@@ -87,7 +87,7 @@ jobs:
           VERSION_CODE="$("$APKANALYZER" manifest version-code "$APK")"
           VERSION_NAME="$(sed -nE 's/.*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n 1)"
           EXPECTED_CERT="$(keytool -exportcert -keystore "$CINEHUB_TV_KEYSTORE_PATH" -storepass "$CINEHUB_TV_KEYSTORE_PASSWORD" -alias "$CINEHUB_TV_KEY_ALIAS" | sha256sum | awk '{print $1}')"
-          ACTUAL_CERT="$("$APKSIGNER" verify --print-certs "$APK" | sed -nE 's/^Signer #1 certificate SHA-256 digest: ([0-9A-Fa-f]+)$/\1/p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
+          ACTUAL_CERT="$("$APKSIGNER" verify --print-certs "$APK" | sed -nE 's/.*certificate SHA-256 digest: ([0-9A-Fa-f]+)$/\1/p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
           test "$APP_ID" = "br.com.cinehub.tv" || { echo "::error::Unexpected applicationId: $APP_ID"; exit 1; }
           test "$VERSION_CODE" -ge 130 || { echo "::error::versionCode must be at least 130"; exit 1; }
           test -n "$VERSION_NAME"
