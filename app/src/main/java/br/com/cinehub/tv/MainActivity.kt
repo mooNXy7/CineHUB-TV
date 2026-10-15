@@ -326,7 +326,8 @@ class MainActivity : AppCompatActivity() {
                 val obj = array.optJSONObject(index) ?: return@mapNotNull null
                 val item = mediaItemFromJson(obj) ?: return@mapNotNull null
                 records[item.id] = obj
-                item
+                val playbackTitle = obj.optString("playbackTitle").ifBlank { item.title }
+                if (playbackTitle != item.title) item.copy(title = playbackTitle) else item
             }.sortedByDescending { records[it.id]?.optLong("updatedAt", 0L) ?: 0L }.take(20)
         } catch (_: Exception) { emptyList() }
         if (items.isEmpty()) return
@@ -337,7 +338,8 @@ class MainActivity : AppCompatActivity() {
             if (sources.isEmpty()) {
                 showMediaDetails(item)
             } else {
-                launchMediaPlayback(item, sources, record.optString("playbackTitle", item.title),
+                val originalItem = mediaItemFromJson(record) ?: item
+                launchMediaPlayback(originalItem, sources, record.optString("playbackTitle", originalItem.title),
                     item.id, record.optLong("positionMs", 0L))
             }
         }
@@ -442,12 +444,14 @@ class MainActivity : AppCompatActivity() {
                         searchButton.isEnabled = true
                         if (query.isNotBlank()) {
                             shelves.removeAllViews()
+                            shelves.visibility = View.GONE
                             results.visibility = View.VISIBLE
                             status.text = if (online.isEmpty()) "Nenhum resultado encontrado para “$query”." else "${online.size} resultados encontrados"
                             renderMediaCards(online, results, "Resultados da busca")
                         } else {
                             results.removeAllViews()
                             results.visibility = View.GONE
+                            shelves.visibility = View.VISIBLE
                             status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
                             renderMediaShelves(section, online, localItems, shelves)
                             enrichCatalogMetadata(section, localItems, online, shelves)
