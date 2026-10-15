@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.os.Handler
 import java.text.SimpleDateFormat
+import java.text.Normalizer
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -188,6 +189,7 @@ class MainActivity : AppCompatActivity() {
         content.addView(hero, LinearLayout.LayoutParams(-1, d(178)))
 
         val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
+        showContinueWatching()
         val recentChannelName = prefs.getString("continue_channel_name", null)
         if (!recentChannelName.isNullOrBlank()) {
             content.addView(label("Continuar assistindo", 20, WHITE, true).apply {
@@ -324,12 +326,8 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(label(section.uppercase(), 12, RED, true).apply { setPadding(d(0), d(8), d(0), d(4)) })
         content.addView(label(headline, 28, WHITE, true).apply { setPadding(d(0), d(0), d(0), d(8)) })
-        content.addView(label(when (section) {
-            "Filmes" -> "Lançamentos, tendências e informações atualizadas online."
-            "Séries" -> "Descubra séries e encontre informações, capas e sinopses."
-            "Animes" -> "Animações e produções japonesas encontradas no catálogo online."
-            else -> "Dramas coreanos e outras produções coreanas disponíveis no catálogo."
-        }, 14, MUTED, false).apply { setPadding(d(0), d(0), d(0), d(14)) })
+        content.addView(label("Catálogo do Saimo + capas e informações online, organizados em prateleiras.", 14, MUTED, false)
+            .apply { setPadding(d(0), d(0), d(0), d(14)) })
 
         val searchLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val search = EditText(this).apply {
@@ -339,63 +337,140 @@ class MainActivity : AppCompatActivity() {
                 "Animes" -> "Buscar anime…"
                 else -> "Buscar dorama…"
             }
-            setSingleLine(true)
-            textSize = 15f
-            setTextColor(WHITE)
-            setHintTextColor(MUTED)
-            setPadding(d(16), d(8), d(16), d(8))
-            imeOptions = EditorInfo.IME_ACTION_SEARCH
-            background = focusBackground(PANEL)
-            isFocusable = true
-            isFocusableInTouchMode = true
+            setSingleLine(true); textSize = 15f; setTextColor(WHITE); setHintTextColor(MUTED)
+            setPadding(d(16), d(8), d(16), d(8)); imeOptions = EditorInfo.IME_ACTION_SEARCH
+            background = focusBackground(PANEL); isFocusable = true; isFocusableInTouchMode = true
         }
         searchLine.addView(search, LinearLayout.LayoutParams(0, d(50), 1f))
         val searchButton = label("BUSCAR", 13, WHITE, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(d(18), d(12), d(18), d(12))
-            background = focusBackground(RED)
-            isFocusable = true
-            isFocusableInTouchMode = true
+            gravity = Gravity.CENTER; setPadding(d(18), d(12), d(18), d(12))
+            background = focusBackground(RED); isFocusable = true; isFocusableInTouchMode = true
         }
         searchLine.addView(searchButton, LinearLayout.LayoutParams(-2, d(50)).apply { marginStart = d(10) })
         content.addView(searchLine)
-        val status = label("Conectando ao catálogo online…", 14, MUTED, false).apply {
-            setPadding(d(2), d(14), d(0), d(10))
-        }
+        val status = label("Carregando catálogo e categorias…", 14, MUTED, false)
+            .apply { setPadding(d(2), d(12), d(0), d(10)) }
         content.addView(status)
         val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val shelves = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(results)
+        content.addView(shelves)
 
         fun runSearch(query: String) {
-            status.text = if (query.isBlank()) "Atualizando catálogo online…" else "Buscando “$query”…"
+            status.text = if (query.isBlank()) "Atualizando catálogo e categorias…" else "Buscando “$query”…"
             searchButton.isEnabled = false
             io.execute {
                 try {
-                    val items = if (query.isBlank()) OnlineCatalogRepository.feed(section)
+                    val online = if (query.isBlank()) OnlineCatalogRepository.feed(section)
                         else OnlineCatalogRepository.search(query, section)
-                    runOnUiThread {
-                        if (currentSection != section) return@runOnUiThread
-                        status.text = if (items.isEmpty()) {
-                            if (query.isBlank()) "Nenhum título encontrado nesta área. Tente buscar pelo nome."
-                            else "Nenhum resultado encontrado para “$query”."
-                        } else "${items.size} títulos encontrados"
-                        searchButton.isEnabled = true
-                        renderMediaCards(items, results)
+                    val local = if (query.isBlank()) SaimoVodRepository.catalogTitles(this@MainActivity, section, 80)
+                        else emptyList()
+                    val normalized = { value: String ->
+                        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+                            .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
                     }
-                } catch (e: Exception) {
+                    val onlineByTitle = online.associateBy { normalized(it.title) }
+                    val localItems = local.map { entry ->
+                        val match = onlineByTitle[normalized(entry.title)]
+                        match ?: MediaItem(
+                            id = "saimo-${section.lowercase(Locale.ROOT)}-${normalized(entry.title).replace(' ', '-')}",
+                            title = entry.title,
+                            type = if (section == "Filmes") "movie" else "tv",
+                            poster = null, backdrop = null, year = "", rating = "—", description = "",
+                            genreIds = emptySet(), language = "", countries = emptySet()
+                        )
+                    }.distinctBy { normalized(it.title) }
                     runOnUiThread {
                         if (currentSection != section) return@runOnUiThread
-                        status.text = "Não foi possível conectar ao catálogo online. Tente novamente."
                         searchButton.isEnabled = true
+                        if (query.isNotBlank()) {
+                            shelves.removeAllViews()
+                            results.visibility = View.VISIBLE
+                            status.text = if (online.isEmpty()) "Nenhum resultado encontrado para “$query”." else "${online.size} resultados encontrados"
+                            renderMediaCards(online, results, "Resultados da busca")
+                        } else {
+                            results.removeAllViews()
+                            results.visibility = View.GONE
+                            status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
+                            renderMediaShelves(section, online, localItems, shelves)
+                        }
+                    }
+                } catch (_: Exception) {
+                    runOnUiThread {
+                        if (currentSection != section) return@runOnUiThread
+                        searchButton.isEnabled = true
+                        status.text = "Não foi possível atualizar o catálogo online. O índice local continuará disponível quando a conexão voltar."
+                        if (query.isBlank()) {
+                            io.execute {
+                                val local = runCatching { SaimoVodRepository.catalogTitles(this@MainActivity, section, 80) }.getOrDefault(emptyList())
+                                val localItems = local.map { entry ->
+                                    MediaItem("saimo-${section.lowercase(Locale.ROOT)}-${entry.title.hashCode()}",
+                                        entry.title, if (section == "Filmes") "movie" else "tv", null, null, "", "—", "",
+                                        emptySet(), "", emptySet())
+                                }
+                                runOnUiThread {
+                                    if (currentSection == section) renderMediaShelves(section, emptyList(), localItems, shelves)
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
-        searchButton.setOnClickListener { runSearch(search.text.toString()) }
+        searchButton.setOnClickListener { runSearch(search.text.toString().trim()) }
         search.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) { runSearch(search.text.toString()); true } else false
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) { runSearch(search.text.toString().trim()); true } else false
         }
         runSearch("")
+    }
+
+    private fun renderMediaShelves(section: String, online: List<MediaItem>, local: List<MediaItem>, container: LinearLayout) {
+        container.removeAllViews()
+        val normalized = { value: String ->
+            Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+                .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
+        }
+        fun shelf(title: String, items: List<MediaItem>) {
+            val unique = items.filter { it.title.isNotBlank() }.distinctBy { normalized(it.title) }.take(40)
+            if (unique.isEmpty()) return
+            renderMediaCards(unique, container, title)
+        }
+
+        // Primeiro vem o catálogo de reprodução do Saimo, depois as prateleiras
+        // online com capas e metadados. O conteúdo é limitado por fileira para TV Box.
+        shelf(when (section) {
+            "Filmes" -> "Filmes disponíveis no acervo Saimo"
+            "Séries" -> "Séries disponíveis no acervo Saimo"
+            "Animes" -> "Animes do acervo Saimo"
+            else -> "Doramas do acervo Saimo"
+        }, local)
+        shelf(if (section == "Filmes") "Em cartaz e em destaque" else "Em alta", online)
+        when (section) {
+            "Filmes" -> {
+                shelf("Ação e aventura", online.filter { it.genreIds.contains(28) })
+                shelf("Comédia", online.filter { it.genreIds.contains(35) })
+                shelf("Drama", online.filter { it.genreIds.contains(18) })
+                shelf("Animação", online.filter { it.genreIds.contains(16) })
+                shelf("Suspense e mistério", online.filter { it.genreIds.contains(53) || it.genreIds.contains(9648) })
+            }
+            "Séries" -> {
+                shelf("Ação e aventura", online.filter { it.genreIds.contains(10759) })
+                shelf("Drama", online.filter { it.genreIds.contains(18) })
+                shelf("Comédia", online.filter { it.genreIds.contains(35) })
+                shelf("Fantasia e ficção", online.filter { it.genreIds.contains(10765) })
+                shelf("Animações", online.filter { it.genreIds.contains(16) })
+            }
+            "Animes" -> {
+                shelf("Ação e aventura", online.filter { it.genreIds.contains(10759) || it.genreIds.contains(28) })
+                shelf("Fantasia e ficção", online.filter { it.genreIds.contains(10765) })
+                shelf("Animação", online.filter { it.genreIds.contains(16) || it.language == "ja" })
+            }
+            else -> {
+                shelf("Romance e drama", online.filter { it.genreIds.contains(18) || it.genreIds.contains(10749) })
+                shelf("Doramas coreanos", online.filter { it.language == "ko" || it.countries.contains("KR") })
+            }
+        }
+        if (container.childCount == 0) container.addView(label("Nenhum título foi encontrado nesta categoria. Tente atualizar mais tarde.", 14, MUTED, false))
     }
 
     private fun renderMediaCards(items: List<MediaItem>, container: LinearLayout) {
