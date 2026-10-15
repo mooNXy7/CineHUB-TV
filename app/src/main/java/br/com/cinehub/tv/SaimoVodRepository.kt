@@ -106,6 +106,7 @@ object SaimoVodRepository {
             }
             else -> {
                 val letters = ('A'..'Z').map { it.toString() } + "#"
+                val sourceBases = if (normalizedSection == "Filmes") bases(context) else emptyMap()
                 val executor = Executors.newFixedThreadPool(4)
                 try {
                     val tasks = letters.map { letter ->
@@ -116,11 +117,13 @@ object SaimoVodRepository {
                                 if (line.isBlank() || line.startsWith("@") || line.startsWith("#")) return@mapNotNull null
                                 val fields = line.split('\\t')
                                 val title = fields.firstOrNull()?.trim().orEmpty()
-                                if (title.isBlank()) null else title
+                                if (title.isBlank()) null
+                                else if (normalizedSection == "Filmes" && parseSourceFields(fields.drop(1), sourceBases).isEmpty()) null
+                                else title
                             }.toList()
                         }
                     }
-                    executor.invokeAll(tasks).forEach { future ->
+                    for (future in executor.invokeAll(tasks)) {
                         future.get().forEach(::add)
                         if (found.size >= limit) break
                     }
