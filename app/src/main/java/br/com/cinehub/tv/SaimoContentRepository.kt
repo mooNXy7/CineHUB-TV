@@ -59,7 +59,7 @@ object SaimoContentRepository {
     }
 
     /**
-     * First-pass resolver for direct files in Saimo's VOD index.
+     * First-pass resolver for direct files in the connected VOD index.
      * It deliberately returns only URLs suitable for a native Media3 player;
      * metadata IDs and web-page embed URLs are not treated as playable streams.
      */
@@ -106,7 +106,7 @@ object SaimoContentRepository {
         }
         try {
             if (connection.responseCode !in 200..299) {
-                throw IllegalStateException("Saimo content HTTP ${connection.responseCode}: $path")
+                throw IllegalStateException("Content source HTTP ${connection.responseCode}: $path")
             }
             return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
         } finally {
