@@ -109,22 +109,22 @@ object SaimoVodRepository {
                 val sourceBases = if (normalizedSection == "Filmes") bases(context) else emptyMap()
                 val executor = Executors.newFixedThreadPool(4)
                 try {
-                    val tasks = letters.map { letter ->
-                        Callable {
-                            val file = if (normalizedSection == "Filmes") "filmes-$letter.txt" else "series-$letter.txt"
-                            val text = fileText(context, file).orEmpty()
-                            text.lineSequence().mapNotNull { line ->
-                                if (line.isBlank() || line.startsWith("@") || line.startsWith("#")) return@mapNotNull null
-                                val fields = line.split('\\t')
-                                val title = fields.firstOrNull()?.trim().orEmpty()
-                                if (title.isBlank()) null
-                                else if (normalizedSection == "Filmes" && parseSourceFields(fields.drop(1), sourceBases).isEmpty()) null
-                                else title
-                            }.toList()
+                    for (batch in letters.chunked(4)) {
+                        val tasks = batch.map { letter ->
+                            Callable {
+                                val file = if (normalizedSection == "Filmes") "filmes-$letter.txt" else "series-$letter.txt"
+                                val text = fileText(context, file).orEmpty()
+                                text.lineSequence().mapNotNull { line ->
+                                    if (line.isBlank() || line.startsWith("@") || line.startsWith("#")) return@mapNotNull null
+                                    val fields = line.split('\\t')
+                                    val title = fields.firstOrNull()?.trim().orEmpty()
+                                    if (title.isBlank()) null
+                                    else if (normalizedSection == "Filmes" && parseSourceFields(fields.drop(1), sourceBases).isEmpty()) null
+                                    else title
+                                }.toList()
+                            }
                         }
-                    }
-                    for (future in executor.invokeAll(tasks)) {
-                        future.get().forEach(::add)
+                        for (future in executor.invokeAll(tasks)) future.get().forEach(::add)
                         if (found.size >= limit) break
                     }
                 } catch (_: Exception) {
