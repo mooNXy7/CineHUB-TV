@@ -389,7 +389,7 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(label(section.uppercase(), 12, RED, true).apply { setPadding(d(0), d(8), d(0), d(4)) })
         content.addView(label(headline, 28, WHITE, true).apply { setPadding(d(0), d(0), d(0), d(8)) })
-        content.addView(label("Catálogo do Saimo + capas e informações online, organizados em prateleiras.", 14, MUTED, false)
+        content.addView(label("Catálogo CineHUB TV com capas e informações online, organizados em prateleiras.", 14, MUTED, false)
             .apply { setPadding(d(0), d(0), d(0), d(14)) })
 
         val searchLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -439,7 +439,7 @@ class MainActivity : AppCompatActivity() {
                         return@execute
                     }
 
-                    // Renderiza as capas online imediatamente; o índice local do Saimo
+                    // Renderiza as capas online imediatamente; o índice complementar
                     // é carregado em uma segunda tarefa para não segurar a interface.
                     runOnUiThread {
                         if (currentSection != section) return@runOnUiThread
@@ -447,7 +447,7 @@ class MainActivity : AppCompatActivity() {
                         results.removeAllViews()
                         results.visibility = View.GONE
                         shelves.visibility = View.VISIBLE
-                        status.text = "Carregando títulos do acervo Saimo em segundo plano…"
+                        status.text = "Carregando títulos do catálogo CineHUB TV em segundo plano…"
                         renderMediaShelves(section, online, emptyList(), shelves)
                     }
                     catalogIo.execute {
@@ -471,7 +471,7 @@ class MainActivity : AppCompatActivity() {
                         }.distinctBy { normalized(it.title) }
                         runOnUiThread {
                             if (currentSection != section || search.text.toString().isNotBlank() || isFinishing || isDestroyed) return@runOnUiThread
-                            status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
+                            status.text = "${localItems.size} títulos no catálogo CineHUB TV · ${online.size} títulos com capas e metadados online"
                             renderMediaShelves(section, online, localItems, shelves)
                             enrichCatalogMetadata(section, localItems, online, shelves, search)
                         }
@@ -493,7 +493,7 @@ class MainActivity : AppCompatActivity() {
                             runOnUiThread {
                                 if (currentSection == section && search.text.toString().isBlank()) {
                                     renderMediaShelves(section, emptyList(), localItems, shelves)
-                                    status.text = "${localItems.size} títulos do acervo Saimo carregados"
+                                    status.text = "${localItems.size} títulos do catálogo CineHUB TV carregados"
                                 }
                             }
                         }
@@ -520,13 +520,13 @@ class MainActivity : AppCompatActivity() {
             renderMediaCards(unique, container, title)
         }
 
-        // Primeiro vem o catálogo de reprodução do Saimo, depois as prateleiras
+        // Primeiro vem o catálogo de reprodução CineHUB TV, depois as prateleiras
         // online com capas e metadados. O conteúdo é limitado por fileira para TV Box.
         shelf(when (section) {
-            "Filmes" -> "Filmes disponíveis no acervo Saimo"
-            "Séries" -> "Séries disponíveis no acervo Saimo"
-            "Animes" -> "Animes do acervo Saimo"
-            else -> "Doramas do acervo Saimo"
+            "Filmes" -> "Filmes disponíveis no CineHUB TV"
+            "Séries" -> "Séries disponíveis no CineHUB TV"
+            "Animes" -> "Animes no CineHUB TV"
+            else -> "Doramas no CineHUB TV"
         }, local)
         shelf(if (section == "Filmes") "Em cartaz e em destaque" else "Em alta", online)
         when (section) {
@@ -660,7 +660,7 @@ class MainActivity : AppCompatActivity() {
                                 maxLines = 4
                                 setPadding(0, d(10), 0, d(4))
                             })
-                            addView(label("ACERVO SAIMO", 9, MUTED, true).apply {
+                            addView(label("CINEHUB TV", 9, MUTED, true).apply {
                                 gravity = Gravity.CENTER
                                 setPadding(0, d(6), 0, 0)
                             })
@@ -774,7 +774,7 @@ class MainActivity : AppCompatActivity() {
     private fun showRadioStations() {
         content.removeAllViews()
         content.addView(label("Rádios online", 24, WHITE, true).apply { setPadding(d(2), d(6), 0, d(4)) })
-        content.addView(label("Estações carregadas do catálogo público do Saimo TV", 13, MUTED, false).apply { setPadding(d(2), 0, 0, d(12)) })
+        content.addView(label("Estações de rádio disponíveis no CineHUB TV", 13, MUTED, false).apply { setPadding(d(2), 0, 0, d(12)) })
         val status = label("Carregando estações...", 15, MUTED, false).apply { setPadding(d(12), d(14), d(12), d(14)) }
         content.addView(status)
         io.execute {
@@ -886,7 +886,7 @@ class MainActivity : AppCompatActivity() {
         actions.addView(favorite, LinearLayout.LayoutParams(-2, -2).apply { marginStart = d(10) })
         info.addView(actions)
 
-        // Séries, animes e doramas usam os episódios publicados no acervo Saimo.
+        // Séries, animes e doramas usam os episódios disponíveis no catálogo conectado.
         // A lista é carregada em segundo plano e só os episódios disponíveis são exibidos.
         if (item.type != "movie") {
             val episodeArea = LinearLayout(this).apply {
@@ -942,11 +942,31 @@ class MainActivity : AppCompatActivity() {
         panel.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setView(panel)
-            .setNegativeButton("Fechar", null)
+            .setNegativeButton("←  Voltar", null)
             .create()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.setOnShowListener {
             dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.9f).toInt(), -2)
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE)?.apply {
+                setTextColor(WHITE)
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                isFocusable = true
+                isFocusableInTouchMode = true
+                setPadding(d(18), d(12), d(18), d(12))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = d(10).toFloat()
+                    setColor(PANEL)
+                    setStroke(d(1), RED)
+                }
+                setOnFocusChangeListener { view, focused ->
+                    view.background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = d(10).toFloat()
+                        setColor(if (focused) 0xFF4A1118.toInt() else PANEL)
+                        setStroke(d(if (focused) 2 else 1), if (focused) 0xFFFF5A64.toInt() else RED)
+                    }
+                }
+            }
         }
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -1086,8 +1106,8 @@ class MainActivity : AppCompatActivity() {
             status.text = "Verificando atualizações…"
             otaUpdateManager?.checkForUpdate(force = true) { message -> status.text = message }
         }
-        action("Sobre o CineHUB TV", "Versão nativa 1.3.0 • Interface Android/Kotlin • Player Media3") {
-            status.text = "CineHUB TV Kotlin 1.3.0 • Atualizações OTA disponíveis nesta edição."
+        action("Sobre o CineHUB TV", "Versão nativa 1.3.1 • Interface Android/Kotlin • Player Media3") {
+            status.text = "CineHUB TV Kotlin 1.3.1 • Atualizações OTA disponíveis nesta edição."
         }
     }
 
