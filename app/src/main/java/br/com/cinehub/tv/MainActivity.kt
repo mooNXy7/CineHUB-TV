@@ -467,10 +467,10 @@ class MainActivity : AppCompatActivity() {
                             )
                         }.distinctBy { normalized(it.title) }
                         runOnUiThread {
-                            if (currentSection != section || isFinishing || isDestroyed) return@runOnUiThread
+                            if (currentSection != section || search.text.toString().isNotBlank() || isFinishing || isDestroyed) return@runOnUiThread
                             status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
                             renderMediaShelves(section, online, localItems, shelves)
-                            enrichCatalogMetadata(section, localItems, online, shelves)
+                            enrichCatalogMetadata(section, localItems, online, shelves, search)
                         }
                     }
                 } catch (_: Exception) {
@@ -488,7 +488,7 @@ class MainActivity : AppCompatActivity() {
                                     emptySet(), "", emptySet())
                             }
                             runOnUiThread {
-                                if (currentSection == section) {
+                                if (currentSection == section && search.text.toString().isBlank()) {
                                     renderMediaShelves(section, emptyList(), localItems, shelves)
                                     status.text = "${localItems.size} títulos do acervo Saimo carregados"
                                 }
@@ -564,7 +564,8 @@ class MainActivity : AppCompatActivity() {
         section: String,
         localItems: List<MediaItem>,
         onlineItems: List<MediaItem>,
-        container: LinearLayout
+        container: LinearLayout,
+        searchField: EditText
     ) {
         val onlineTitles = onlineItems.map { normalizeMediaTitle(it.title) }.toSet()
         val candidates = localItems.filter {
@@ -589,7 +590,7 @@ class MainActivity : AppCompatActivity() {
                 } finally {
                     if (completed.incrementAndGet() == candidates.size) {
                         runOnUiThread {
-                            if (currentSection != section || isFinishing || isDestroyed) return@runOnUiThread
+                            if (currentSection != section || searchField.text.toString().isNotBlank() || isFinishing || isDestroyed) return@runOnUiThread
                             val enriched = localItems.map { resolved[it.id] ?: it }
                             renderMediaShelves(section, onlineItems, enriched, container)
                         }
