@@ -14,6 +14,7 @@ import java.util.TimeZone
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
 import android.text.Editable
 import android.text.TextWatcher
@@ -496,7 +497,7 @@ class MainActivity : AppCompatActivity() {
         val status = label("Carregando estações...", 15, MUTED, false).apply { setPadding(d(12), d(14), d(12), d(14)) }
         content.addView(status)
         io.execute {
-            val stations = try { SaimoContentRepository.loadRadios() } catch (_: Exception) { emptyList() }
+            val stations = try { SaimoContentRepository.loadRadios(this@MainActivity) } catch (_: Exception) { emptyList() }
             runOnUiThread {
                 if (currentSection != "Rádio") return@runOnUiThread
                 content.removeView(status)
