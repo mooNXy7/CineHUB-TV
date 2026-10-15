@@ -660,6 +660,7 @@ class MainActivity : AppCompatActivity() {
                             text = if (isMediaFavorite(item)) "♥" else "♡"
                             setTextColor(if (isMediaFavorite(item)) RED else WHITE)
                             contentDescription = if (isMediaFavorite(item)) "Remover da Minha Lista" else "Adicionar à Minha Lista"
+                            if (currentSection == "Minha lista") mainHandler.post { showMyList() }
                         }
                     }
                     addView(favorite, android.widget.FrameLayout.LayoutParams(d(40), d(40), Gravity.TOP or Gravity.END).apply {
@@ -1052,6 +1053,9 @@ class MainActivity : AppCompatActivity() {
             favoriteNames.clear()
             getSharedPreferences("cinehub-tv", MODE_PRIVATE).edit()
                 .putStringSet("favorite_channels", emptySet())
+                .putStringSet("favorite_media", emptySet())
+                .putString("favorite_media_items", "[]")
+                .putString("favorite_channel_items", "[]")
                 .apply()
             status.text = "Minha lista foi limpa."
         }
