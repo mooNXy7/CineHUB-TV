@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var content: LinearLayout
     private val sections = listOf("Início", "Ao vivo", "Filmes", "Séries", "Animes", "Doramas", "Rádio", "Minha lista", "Buscar", "Ajustes")
     private val io = Executors.newSingleThreadExecutor()
+    private val metadataIo = Executors.newFixedThreadPool(3)
     private var channels: List<TvChannel> = emptyList()
     private var currentSection = "Início"
     private val favoriteNames = linkedSetOf<String>()
@@ -329,10 +330,7 @@ class MainActivity : AppCompatActivity() {
             }.sortedByDescending { records[it.id]?.optLong("updatedAt", 0L) ?: 0L }.take(20)
         } catch (_: Exception) { emptyList() }
         if (items.isEmpty()) return
-        content.addView(label("Continuar assistindo", 20, WHITE, true).apply {
-            setPadding(d(2), d(14), 0, d(7))
-        })
-        renderMediaCards(items, content, "Seus últimos conteúdos") { item ->
+        renderMediaCards(items, content, "Continuar assistindo") { item ->
             val record = records[item.id] ?: return@renderMediaCards
             val sourcesJson = record.optJSONArray("sources") ?: org.json.JSONArray()
             val sources = (0 until sourcesJson.length()).mapNotNull { sourcesJson.optString(it).takeIf { url -> url.startsWith("http://") || url.startsWith("https://") } }
@@ -452,6 +450,7 @@ class MainActivity : AppCompatActivity() {
                             results.visibility = View.GONE
                             status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
                             renderMediaShelves(section, online, localItems, shelves)
+                            enrichCatalogMetadata(section, localItems, online, shelves)
                         }
                     }
                 } catch (_: Exception) {
@@ -532,6 +531,51 @@ class MainActivity : AppCompatActivity() {
         if (container.childCount == 0) container.addView(label("Nenhum título foi encontrado nesta categoria. Tente atualizar mais tarde.", 14, MUTED, false))
     }
 
+    private fun normalizeMediaTitle(value: String): String =
+        Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "")
+            .replace(Regex("\\b(19|20)\\d{2}\\b"), "")
+            .replace(Regex("[^a-z0-9]+"), " ").trim()
+
+    private fun enrichCatalogMetadata(
+        section: String,
+        localItems: List<MediaItem>,
+        onlineItems: List<MediaItem>,
+        container: LinearLayout
+    ) {
+        val onlineTitles = onlineItems.map { normalizeMediaTitle(it.title) }.toSet()
+        val candidates = localItems.filter {
+            it.poster.isNullOrBlank() && normalizeMediaTitle(it.title) !in onlineTitles
+        }.take(8)
+        if (candidates.isEmpty()) return
+        val resolved = java.util.concurrent.ConcurrentHashMap<String, MediaItem>()
+        val completed = java.util.concurrent.atomic.AtomicInteger(0)
+        candidates.forEach { item ->
+            metadataIo.execute {
+                try {
+                    val wanted = normalizeMediaTitle(item.title)
+                    val match = OnlineCatalogRepository.search(item.title, section)
+                        .filter { !it.poster.isNullOrBlank() }
+                        .firstOrNull { candidate ->
+                            val title = normalizeMediaTitle(candidate.title)
+                            title == wanted || title.startsWith(wanted) || wanted.startsWith(title)
+                        }
+                    if (match != null) resolved[item.id] = match.copy(id = item.id)
+                } catch (_: Exception) {
+                    // A title can stay in the local catalog even when metadata is unavailable.
+                } finally {
+                    if (completed.incrementAndGet() == candidates.size) {
+                        runOnUiThread {
+                            if (currentSection != section || isFinishing || isDestroyed) return@runOnUiThread
+                            val enriched = localItems.map { resolved[it.id] ?: it }
+                            renderMediaShelves(section, onlineItems, enriched, container)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private fun renderMediaCards(
         items: List<MediaItem>,
         container: LinearLayout,
@@ -572,6 +616,30 @@ class MainActivity : AppCompatActivity() {
                         } }
                     }
                     addView(poster, android.widget.FrameLayout.LayoutParams(-1, -1))
+                    if (item.poster.isNullOrBlank()) {
+                        val fallback = LinearLayout(this@MainActivity).apply {
+                            orientation = LinearLayout.VERTICAL
+                            gravity = Gravity.CENTER
+                            setPadding(d(10), d(12), d(10), d(12))
+                            background = android.graphics.drawable.GradientDrawable(
+                                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                                intArrayOf(0xFF351016.toInt(), 0xFF151518.toInt(), 0xFF080809.toInt())
+                            ).apply { cornerRadius = d(12).toFloat() }
+                            addView(label(if (item.type == "movie") "CINEHUB FILMES" else "CINEHUB SÉRIES", 10, RED, true).apply {
+                                gravity = Gravity.CENTER
+                            })
+                            addView(label(item.title, 17, WHITE, true).apply {
+                                gravity = Gravity.CENTER
+                                maxLines = 4
+                                setPadding(0, d(10), 0, d(4))
+                            })
+                            addView(label("ACERVO SAIMO", 9, MUTED, true).apply {
+                                gravity = Gravity.CENTER
+                                setPadding(0, d(6), 0, 0)
+                            })
+                        }
+                        addView(fallback, android.widget.FrameLayout.LayoutParams(-1, -1))
+                    }
                     val favorite = label(if (isMediaFavorite(item)) "♥" else "♡", 22,
                         if (isMediaFavorite(item)) RED else WHITE, true).apply {
                         gravity = Gravity.CENTER
