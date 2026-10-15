@@ -86,7 +86,7 @@ object SaimoVodRepository {
         val type = if (normalizedSection == "Filmes") "movie" else "tv"
         val found = linkedMapOf<String, CatalogTitle>()
         fun add(title: String) {
-            val clean = title.trim().substringBeforeLast("\\t").trim()
+            val clean = title.trim().substringBeforeLast("\t").trim()
             if (clean.isBlank() || clean.startsWith("@") || clean.length > 180) return
             val key = normalize(stripYear(clean))
             if (key.isBlank()) return
@@ -99,7 +99,7 @@ object SaimoVodRepository {
                 val text = fileText(context, file) ?: return emptyList()
                 text.lineSequence().forEach { line ->
                     if (line.startsWith("@")) {
-                        val fields = line.drop(1).split('\\t')
+                        val fields = line.drop(1).split('\t')
                         add(fields.firstOrNull().orEmpty())
                     }
                 }
@@ -116,7 +116,7 @@ object SaimoVodRepository {
                                 val text = fileText(context, file).orEmpty()
                                 text.lineSequence().mapNotNull { line ->
                                     if (line.isBlank() || line.startsWith("@") || line.startsWith("#")) return@mapNotNull null
-                                    val fields = line.split('\\t')
+                                    val fields = line.split('\t')
                                     val title = fields.firstOrNull()?.trim().orEmpty()
                                     if (title.isBlank()) null
                                     else if (normalizedSection == "Filmes" && parseSourceFields(fields.drop(1), sourceBases).isEmpty()) null
