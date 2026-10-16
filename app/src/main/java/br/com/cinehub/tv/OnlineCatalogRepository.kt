@@ -20,7 +20,8 @@ data class MediaItem(
     val description: String,
     val genreIds: Set<Int>,
     val language: String,
-    val countries: Set<String>
+    val countries: Set<String>,
+    val playbackSources: List<String> = emptyList()
 )
 
 object OnlineCatalogRepository {
@@ -94,6 +95,25 @@ object OnlineCatalogRepository {
                     if (genre.contains("anima")) genreIds.add(16)
                 }
             }
+            val playbackSources = mutableListOf<String>()
+            val sourceArray = item.optJSONArray("sources")
+            if (category == "movies" && sourceArray != null) {
+                for (sourceIndex in 0 until sourceArray.length()) {
+                    val source = sourceArray.optJSONObject(sourceIndex) ?: continue
+                    val url = source.optString("url").trim()
+                    val sourceType = source.optString("source_type").lowercase(Locale.ROOT)
+                    val lower = url.lowercase(Locale.ROOT)
+                    val looksNative = lower.contains(".m3u8") || lower.contains(".mp4") ||
+                        lower.contains(".mpd") || lower.contains(".mkv") || lower.contains(".ts") ||
+                        lower.contains("master.txt") || lower.contains("/cdn/hls/") ||
+                        lower.contains("/stream") || lower.contains("/live")
+                    if (sourceType != "embed" && looksNative &&
+                        (url.startsWith("https://") || url.startsWith("http://")) &&
+                        !lower.contains("youtube.com") && !lower.contains("youtu.be")) {
+                        playbackSources.add(url)
+                    }
+                }
+            }
             items.add(MediaItem(
                 id = "acervo-$id",
                 title = title,
@@ -105,7 +125,8 @@ object OnlineCatalogRepository {
                 description = "",
                 genreIds = genreIds,
                 language = when (category) { "anime" -> "ja"; "doramas" -> "ko"; else -> "" },
-                countries = if (category == "doramas") setOf("KR") else emptySet()
+                countries = if (category == "doramas") setOf("KR") else emptySet(),
+                playbackSources = playbackSources.distinct()
             ))
         }
         val stable = items.distinctBy { it.id }
