@@ -1,5 +1,7 @@
 package com.cinehub.player
 
+import br.com.cinehub.tv.R
+
 import android.app.Activity
 import androidx.media3.common.C
 import androidx.media3.common.TrackSelectionOverride
