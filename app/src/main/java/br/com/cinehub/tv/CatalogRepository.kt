@@ -92,8 +92,8 @@ object CatalogRepository {
 
     private fun downloadText(url: String, userAgent: String, connectTimeout: Int, readTimeout: Int): String {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = connectTimeout
-            readTimeout = readTimeout
+            this.connectTimeout = connectTimeout
+            this.readTimeout = readTimeout
             requestMethod = "GET"
             setRequestProperty("User-Agent", userAgent)
         }
