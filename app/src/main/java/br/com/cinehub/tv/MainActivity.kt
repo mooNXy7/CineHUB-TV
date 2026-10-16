@@ -400,7 +400,11 @@ class MainActivity : AppCompatActivity() {
             }.sortedByDescending { records[it.id]?.optLong("updatedAt", 0L) ?: 0L }.take(20)
         } catch (_: Exception) { emptyList() }
         if (items.isEmpty()) return
-        renderMediaCards(items, content, "Continuar assistindo") { item ->
+        val continueRow = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(42), d(8), d(42), d(4))
+        }
+        renderMediaCards(items, continueRow, "Continuar assistindo") { item ->
             val record = records[item.id] ?: return@renderMediaCards
             val sourcesJson = record.optJSONArray("sources") ?: org.json.JSONArray()
             val sources = (0 until sourcesJson.length()).mapNotNull { sourcesJson.optString(it).takeIf { url -> url.startsWith("http://") || url.startsWith("https://") } }
@@ -412,6 +416,8 @@ class MainActivity : AppCompatActivity() {
                     item.id, record.optLong("positionMs", 0L))
             }
         }
+        // Keep the hero as the first item; insert Continue Watching directly below it.
+        content.addView(continueRow, 1.coerceAtMost(content.childCount), LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun launchMediaPlayback(
