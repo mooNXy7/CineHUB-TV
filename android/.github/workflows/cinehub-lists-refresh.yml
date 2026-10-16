@@ -4,8 +4,8 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "CineHUB_TV_Android/CineHUB-TV/src/main/assets/cinehub/dados/listas.json"
-      - "CineHUB_TV_Android/CineHUB-TV/src/main/assets/cinehub/tools/**"
+      - "android/CineHUB-TV/src/main/assets/cinehub/dados/listas.json"
+      - "android/CineHUB-TV/src/main/assets/cinehub/tools/**"
   schedule:
     - cron: "17 3 */3 * *"
   workflow_dispatch:
@@ -21,15 +21,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validar fontes M3U/M3U8
-        run: |
-          python3 CineHUB-TV/src/main/assets/cinehub/tools/atualizar_listas.py
-        working-directory: CineHUB_TV_Android
+        run: python3 android/CineHUB-TV/src/main/assets/cinehub/tools/atualizar_listas.py
 
       - name: Publicar status
         run: |
           git config user.name "CineHUB Bot"
           git config user.email "actions@github.com"
-          git add CineHUB-TV/src/main/assets/cinehub/dados/listas-status.json
+          git add android/CineHUB-TV/src/main/assets/cinehub/dados/listas-status.json
           if git diff --cached --quiet; then
             echo "Nenhuma alteração no status."
             exit 0

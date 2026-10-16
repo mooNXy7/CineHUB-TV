@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Identidade CineHUB: preto, branco e vermelho como único destaque. -->
+<resources>
+    <color name="surface">#0B0E14</color>
+    <color name="surface_card">#D90B0E14</color>
+    <color name="surface_panel">#F00B0E14</color>
+    <color name="surface_raised">#14FFFFFF</color>
+
+    <color name="accent">#E50914</color>
+    <color name="accent_dim">#33E50914</color>
+    <color name="accent_edge">#66E50914</color>
+
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#A8B4C0</color>
+    <color name="text_faint">#66FFFFFF</color>
+
+    <color name="live">#FF4D4F</color>
+
+    <!-- O azul-marinho do primeiro quadro da abertura: a janela abre nele e o
+         vídeo entra sem clarão. -->
+    <color name="abertura_fundo">#0B0F2A</color>
+    <color name="texto_botao_ficha">#FFFFFFFF</color>
+
+    <color name="texto_item_painel_sub">#A8B4C0</color>
+</resources>

@@ -1,1 +1,30 @@
-# CineHUB-TV
+# CineHUB TV — Kotlin oficial
+
+Aplicativo nativo para Android TV e TV Box. A versão oficial atual é **1.3.3** (`versionCode` 133), com player Media3/ExoPlayer.
+
+## OTA oficial
+
+O atualizador Kotlin lê [`update-kotlin.json`](./update-kotlin.json), que aponta para a release estável `kotlin-v1.3.3` e valida o SHA-256 do APK publicado. A publicação oficial usa a chave de assinatura de produção configurada nos segredos do repositório.
+
+## Compilar localmente
+
+Requisitos: JDK 17, Android SDK 36 e Gradle 8.14.3.
+
+```bash
+gradle :app:assembleDebug --no-daemon
+```
+
+Para gerar uma release assinada, configure `CINEHUB_TV_KEYSTORE_BASE64`, `CINEHUB_TV_KEYSTORE_PASSWORD`, `CINEHUB_TV_KEY_ALIAS` e `CINEHUB_TV_KEY_PASSWORD`.
+
+## Estrutura ativa
+
+- `app/`: aplicativo Kotlin nativo, catálogo e player Media3/ExoPlayer.
+- A publicação assinada e a OTA oficial continuam isoladas na branch `release/kotlin-ota-v1.3.3`; este PR não adiciona uma segunda entrada manual de publicação em `main`.
+- `.github/workflows/kotlin-pr-validation.yml`: compilação e validação de metadados em pull requests para `main`.
+- `frontend/` e `downloader-site/`: interfaces e página de download.
+- `android/CineHUB-TV/src/main/assets/cinehub/`: site web publicado no Cloudflare Pages; esses arquivos são preservados. Foi removido apenas o invólucro Android WebView legado.
+- `android/wrangler.toml`: configuração Cloudflare Pages, preservada.
+
+## Histórico
+
+O aplicativo WebView 1.2.9 foi legado e substituído pela versão Kotlin nativa. A release e a tag históricas foram preservadas para auditoria e rollback; elas não são a versão oficial atual. A limpeza do código legado não altera o APK 1.3.3 já publicado nem o manifesto OTA estável.
