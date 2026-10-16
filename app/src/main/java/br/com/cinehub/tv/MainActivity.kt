@@ -861,11 +861,14 @@ class MainActivity : AppCompatActivity() {
                     else -> "Séries"
                 }
                 io.execute {
-                    val sources = try {
+                    val resolvedSources = try {
                         SaimoVodRepository.findDirectPlayback(
                             this@MainActivity, item.title, item.type == "movie", resolverSection, item.id
                         )
                     } catch (_: Exception) { emptyList() }
+                    // ACERVO's validated direct-file/HLS candidates are tried first; the
+                    // established CineHUB resolver remains the fallback source of playback.
+                    val sources = (item.playbackSources + resolvedSources).distinct()
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         isEnabled = true
