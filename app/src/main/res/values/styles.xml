@@ -8,4 +8,10 @@
         <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="android:colorAccent">#E50914</item>
     </style>
+
+    <!-- Player window must not decode/draw the splash artwork behind full-screen video. -->
+    <style name="Theme.CineHUB.Player">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
 </resources>
