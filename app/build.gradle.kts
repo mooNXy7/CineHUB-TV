@@ -62,6 +62,7 @@ dependencies {
     implementation("androidx.tvprovider:tvprovider:1.1.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("io.coil-kt:coil:2.7.0")
     implementation("io.coil-kt.coil3:coil:3.4.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
     testImplementation("junit:junit:4.13.2")
