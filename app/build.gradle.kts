@@ -15,6 +15,17 @@ android {
         versionName = "1.3.2"
     }
 
+    // The test APK installs alongside the official app and cannot replace its package.
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -38,15 +49,6 @@ android {
     // unchanged and suppress only Play-store target-SDK policy lint for sideloaded releases.
     lint {
         disable += "ExpiredTargetSdkVersion"
-    }
-
-    buildTypes {
-        getByName("release") {
-            isMinifyEnabled = false
-            if (!releaseStorePath.isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
-        }
     }
 }
 
