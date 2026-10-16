@@ -29,6 +29,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
@@ -106,6 +107,7 @@ class PlayerActivity : Activity() {
     private var stillWatchingRunnable: Runnable? = null
     private var stillWatchingDialog: android.app.AlertDialog? = null
     private var progressSaveRunnable: Runnable? = null
+    private var startupFailed: Boolean = false
     private val progressSaveIntervalMs = 15_000L
     private val stillWatchingIntervalMs = 2L * 60L * 60L * 1_000L
 
@@ -280,7 +282,10 @@ class PlayerActivity : Activity() {
                 if (lowMemory) 750 else 1_000,
                 if (lowMemory) 1_500 else 2_000
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setTargetBufferBytes(
+                if (lowMemory) 32 * 1024 * 1024 else 96 * 1024 * 1024
+            )
+            .setPrioritizeTimeOverSizeThresholds(!lowMemory)
             .build()
 
         // Media3's default HTTP client sends a browser-like Accept header and a
@@ -294,6 +299,7 @@ class PlayerActivity : Activity() {
         httpDataSourceFactory = httpFactory
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
+            .setRenderersFactory(DefaultRenderersFactory(this).setEnableDecoderFallback(true))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .build().also { exo ->
@@ -394,6 +400,7 @@ class PlayerActivity : Activity() {
         playSource(0)
         loadIntroMarkers()
         } catch (failure: Throwable) {
+            startupFailed = true
             Log.e("CINEHUB_PLAYER_STARTUP_CRASH", "Player startup failed", failure)
             val details = buildString {
                 append(failure.javaClass.name)
@@ -402,17 +409,24 @@ class PlayerActivity : Activity() {
                 append("\n\n")
                 append(Log.getStackTraceString(failure).take(4200))
             }
+            getSharedPreferences("player-diagnostics", MODE_PRIVATE).edit()
+                .putString("last_startup_exception", details)
+                .putLong("last_startup_exception_at", System.currentTimeMillis())
+                .apply()
             runCatching {
-                android.app.AlertDialog.Builder(this)
+                val dialog = android.app.AlertDialog.Builder(this)
                     .setTitle("Falha ao iniciar o player")
                     .setMessage(details)
                     .setCancelable(false)
                     .setPositiveButton("Voltar") { _, _ -> finish() }
-                    .show()
+                    .create()
+                dialog.setOnDismissListener { if (!isFinishing) finish() }
+                dialog.show()
             }.onFailure {
                 Toast.makeText(this, "Falha no player: ${failure.javaClass.simpleName}: ${failure.message}", Toast.LENGTH_LONG).show()
                 finish()
             }
+            return
         }
     }
 
@@ -1525,12 +1539,13 @@ class PlayerActivity : Activity() {
         cancelProgressSave()
         persistPlaybackProgress()
         if (!isFinishing) player?.pause()
-        playerView.player = null
+        if (::playerView.isInitialized) playerView.player = null
         radioExperience?.setPlaybackState(false)
     }
 
     override fun onStart() {
         super.onStart()
+        if (startupFailed || !::playerView.isInitialized) return
         playerView.player = if (isRadio) null else player
         backgrounding = false
         if (resumeAfterStop && !isFinishing) player?.play()
@@ -1560,7 +1575,7 @@ class PlayerActivity : Activity() {
         posterExecutor.shutdownNow()
         providerResolverExecutor.shutdownNow()
         subtitleExecutor.shutdownNow()
-        playerView.player = null
+        if (::playerView.isInitialized) playerView.player = null
         player?.release()
         player = null
         internalSubtitleFile?.delete()
