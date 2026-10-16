@@ -44,6 +44,10 @@ object OnlineCatalogRepository {
         return runCatching { legacyFeed(section) }.getOrDefault(emptyList())
     }
 
+    /** Lightweight discovery feed for the rotating home hero; avoid downloading 50k records at launch. */
+    fun previewFeed(section: String): List<MediaItem> =
+        runCatching { legacyFeed(section) }.getOrDefault(emptyList())
+
     /**
      * Searches the complete selected ACERVO index locally after loading/caching it,
      * rather than searching only the first page of the external discovery API.
