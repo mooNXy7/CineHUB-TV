@@ -1,0 +1,23 @@
+name: CineHUB TV EPG JavaScript Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/CineHUB-TV/src/main/assets/cinehub/src/js/epg.js"
+      - ".github/workflows/tv-epg-js-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check EPG JavaScript syntax
+        run: node --check android/CineHUB-TV/src/main/assets/cinehub/src/js/epg.js
