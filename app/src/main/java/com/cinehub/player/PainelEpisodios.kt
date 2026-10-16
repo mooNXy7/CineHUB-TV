@@ -1,5 +1,7 @@
 package com.cinehub.player
 
+import br.com.cinehub.tv.R
+
 import android.app.Dialog
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable

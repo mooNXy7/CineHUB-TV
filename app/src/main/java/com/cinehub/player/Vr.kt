@@ -1,5 +1,7 @@
 package com.cinehub.player
 
+import br.com.cinehub.tv.R
+
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.Application
