@@ -58,6 +58,11 @@ class OtaUpdateManager(private val activity: AppCompatActivity) {
     }
 
     fun checkForUpdate(force: Boolean = false, onResult: ((String) -> Unit)? = null) {
+        // Test builds are deliberately excluded from the official OTA channel.
+        if (activity.packageName.endsWith(".test")) {
+            if (force) activity.runOnUiThread { onResult?.invoke("Atualizações OTA desativadas nesta versão de teste.") }
+            return
+        }
         if (closed) return
         val now = System.currentTimeMillis()
         val lastCheck = preferences.getLong("last_check", 0L)
@@ -184,6 +189,8 @@ class OtaUpdateManager(private val activity: AppCompatActivity) {
     }
 
     fun resumeInstallIfReady() {
+        // Never resume or install official OTA packages from the isolated test application.
+        if (activity.packageName.endsWith(".test")) return
         if (closed) return
         if (preferences.getString("pending_install", "false") == "true") {
             val file = apkFile()
