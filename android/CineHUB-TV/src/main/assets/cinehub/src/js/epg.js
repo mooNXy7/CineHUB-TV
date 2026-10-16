@@ -1,12 +1,12 @@
 /*
- * CineHUB EPG — SaimoPlayer architecture adapted to the web.
+ * CineHUB TV EPG — multi-source programme guide.
  *
  * IMPORTANT:
  * - EPG is enrichment only. It NEVER removes, replaces or filters channels.
  * - Keeps the existing window.CineHUBEPG API used by cinehub.js.
- * - Uses the Saimo byte-scanner/matching strategy instead of DOMParser over the
+ * - Uses a byte-scanner instead of DOMParser over the
  *   entire XML document, which avoids large synchronous DOM work on Android.
- * - Tries the original Saimo feeds first, then browser-friendly GitHub mirrors,
+ * - Tries public XMLTV feeds and channel-specific schedule pages,
  *   then Pluto TV. A failed source never aborts the other sources.
  */
 (function(){
@@ -19,26 +19,28 @@ const PAST=6*60*60*1000;
 const FUTURE=3*24*60*60*1000;
 const REQUEST_TIMEOUT=60000;
 
-/* The first two are the feeds used by SaimoPlayer. The GitHub feed is a
- * browser-friendly fallback because some deployments block direct XMLTV
- * requests through CORS. Pluto is kept as an ID-based fallback. */
+/* Public XMLTV feeds provide broad fallback coverage; Pluto is matched by ID. */
 const SOURCES={
-  saimo:[
-    ['Guia principal','https://iptv-epg.org/files/epg-br.xml'],
-    ['Guia reserva','https://www.open-epg.com/files/brazil3.xml'],
-    ['Pluto TV','https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/PlutoTV/br.xml']
+  default:[
+    ['Pluto TV Brasil','https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/PlutoTV/br.xml'],
+    ['IPTV EPG Brasil','https://iptv-epg.org/files/epg-br.xml'],
+    ['Open EPG Brasil','https://www.open-epg.com/files/brazil3.xml']
   ],
-  iptvcom:[
-    ['Pluto TV','https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/PlutoTV/br.xml'],
-    ['Guia principal','https://iptv-epg.org/files/epg-br.xml'],
-    ['Guia reserva','https://www.open-epg.com/files/brazil3.xml']
+  alternate:[
+    ['IPTV EPG Brasil','https://iptv-epg.org/files/epg-br.xml'],
+    ['Open EPG Brasil','https://www.open-epg.com/files/brazil3.xml'],
+    ['Pluto TV Brasil','https://raw.githubusercontent.com/matthuisman/i.mjh.nz/master/PlutoTV/br.xml']
   ]
 };
+const ACERVO_MAP_URL='https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/catalog/epg/channel-map.json';
+const ACERVO_SOURCES_URL='https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/catalog/epg/sources.json';
+const MEUGUIA_BASE='https://meuguia.tv/programacao/canal/';
+const GUIADETV_BASE='https://www.guiadetv.com/canal/';
 
 const state={
   programmes:new Map(),
   loading:false,
-  source:'saimo',
+  source:'default',
   updatedAt:0,
   error:null,
   matchedChannels:0,
@@ -120,11 +122,17 @@ function writeCache(){
 }
 
 function setSource(source){
-  state.source=SOURCES[source]?source:'saimo';
+  const migrated=source==='saimo'?'default':source==='iptvcom'?'alternate':source;
+  state.source=SOURCES[migrated]?migrated:'default';
   try{localStorage.setItem(SOURCE_KEY,state.source)}catch{}
 }
 function getSource(){
-  try{return SOURCES[localStorage.getItem(SOURCE_KEY)]?localStorage.getItem(SOURCE_KEY):'saimo'}catch{return 'saimo'}
+  try{
+    const saved=localStorage.getItem(SOURCE_KEY);
+    if(saved==='saimo')return 'default';
+    if(saved==='iptvcom')return 'alternate';
+    return SOURCES[saved]?saved:'default';
+  }catch{return 'default'}
 }
 state.source=getSource();
 
@@ -187,8 +195,7 @@ function attr(bytes,open,end,name){
   return q<0?'':sliceText(bytes,p+needle.length,q);
 }
 
-/* Port of SaimoPlayer's XMLTV parser: scan bytes, materialise text only for
- * relevant channel/programme blocks, and keep only a short time window. */
+/* XMLTV parser: scan bytes, materialise text only for relevant blocks. */
 function parseXML(text,channels,{plutoIds=null}={}){
   const bytes=bytesOf(text);
   const xmlToChannel=new Map();
@@ -296,6 +303,103 @@ function parseXML(text,channels,{plutoIds=null}={}){
   return {map:out,matched};
 }
 
+
+function textOnly(html){
+  return decodeEntities(String(html||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ')).trim();
+}
+function saoPauloDate(year,month,day,hour,minute){return Date.UTC(year,month-1,day,hour+3,minute,0)}
+function parseMeuGuia(html){
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'numeric',day:'numeric'}).formatToParts(new Date());
+  const current={year:+parts.find(x=>x.type==='year').value,month:+parts.find(x=>x.type==='month').value,day:+parts.find(x=>x.type==='day').value};
+  let day={...current};const partial=[];
+  for(const item of String(html||'').split(/<li\b/i).slice(1)){
+    if(/subheader/i.test(item.slice(0,180))){
+      const raw=(item.match(/subheader[\s\S]*?>\s*([^<]+)</i)||[])[1]||'';
+      const m=raw.match(/,\s*(\d{1,2})\/(\d{1,2})/);
+      if(m){const d=+m[1],mo=+m[2];day={year:mo<current.month?current.year+1:current.year,month:mo,day:d};}
+      continue;
+    }
+    const clock=(item.match(/lileft\s+time["']?\s*>\s*(\d{1,2}:\d{2})</i)||[])[1];
+    const title=(item.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i)||[])[1];
+    if(!clock||!title)continue;
+    const hm=clock.split(':').map(Number),titleText=textOnly(title);
+    if(!titleText||hm.length!==2||hm[0]>23||hm[1]>59)continue;
+    const category=textOnly((item.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i)||[])[1]||'');
+    partial.push({start:saoPauloDate(day.year,day.month,day.day,hm[0],hm[1]),title:titleText,desc:'',category,episode:'',year:'',credits:'',poster:''});
+  }
+  partial.sort((a,b)=>a.start-b.start);
+  return partial.map((p,i)=>({...p,stop:partial[i+1]?.start||p.start+3600000})).filter(p=>p.stop>Date.now()-PAST&&p.start<Date.now()+FUTURE);
+}
+function parseGuiaDeTv(html){
+  const partial=[];const re=/data-dt="(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):\d{2}[^"]*"[\s\S]*?<a[^>]*href="[^"]*programa\/[^"]+"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while((m=re.exec(String(html||'')))!==null){
+    const title=textOnly(m[6]);if(title.length<2)continue;
+    partial.push({start:saoPauloDate(+m[1],+m[2],+m[3],+m[4],+m[5]),title,desc:'',category:'',episode:'',year:'',credits:'',poster:''});
+  }
+  partial.sort((a,b)=>a.start-b.start);
+  return partial.map((p,i)=>({...p,stop:partial[i+1]?.start||p.start+3600000})).filter(p=>p.stop>Date.now()-PAST&&p.start<Date.now()+FUTURE);
+}
+async function loadAcervoConfig(){
+  const [mapResult,sourceResult]=await Promise.allSettled([fetchText(ACERVO_MAP_URL,8000),fetchText(ACERVO_SOURCES_URL,8000)]);
+  let map=null,registry=null;
+  if(mapResult.status==='fulfilled'){try{map=JSON.parse(mapResult.value)}catch{}}
+  if(sourceResult.status==='fulfilled'){try{registry=JSON.parse(sourceResult.value)}catch{}}
+  if(!map||!registry)console.warn('[CineHUB] Configuração remota de EPG incompleta; fontes locais de reserva seguem ativas.');
+  return {map,sources:Array.isArray(registry?.sources)?registry.sources:[]};
+}
+async function fetchMappedSchedules(channels,config,kind,already){
+  const mapDoc=config?.map;
+  if(!mapDoc)return new Map();
+  const sourceId=kind==='meuguia'?'meuguia-br':'guia-de-tv-br';
+  const registered=(config.sources||[]).find(x=>x.id===sourceId);
+  const template=registered?.url_template;
+  const urlFor=code=>template?template.replace('{code}',encodeURIComponent(code)):(kind==='meuguia'?MEUGUIA_BASE:GUIADETV_BASE)+encodeURIComponent(code);
+  const codes=kind==='meuguia'?(mapDoc.meuguia_codes||{}):(mapDoc.guiadetv_slugs||{});
+  const entries=new Map();
+  for(const ch of channels){
+    const name=channelKey(ch),key=Object.keys(codes).find(k=>normalise(k)===name);
+    if(!key)continue;
+    const code=codes[key];if(!entries.has(code))entries.set(code,[]);entries.get(code).push(ch);
+  }
+  if(kind==='guiadetv'){
+    for(const [code,items] of [...entries]){
+      const remaining=items.filter(ch=>!(already.get(ch.nome)||[]).length);
+      if(!remaining.length)entries.delete(code);else entries.set(code,remaining);
+    }
+  }
+  if(!entries.size)return new Map();
+  const preferredProbe=kind==='meuguia'?(codes.HBO||'HBO'):(codes['SONY Movies']||'sony-movies');
+  const codesList=[...entries.keys()],probeCode=entries.has(preferredProbe)?preferredProbe:codesList[0];
+  const results=new Map();let ok=0,failed=0,index=0;
+  try{
+    const html=await fetchText(urlFor(probeCode),8000);
+    const parsed=kind==='meuguia'?parseMeuGuia(html):parseGuiaDeTv(html);
+    if(!parsed.length)throw new Error('Página acessível, mas sem grade reconhecível.');
+    ok++;
+    for(const ch of entries.get(probeCode)||[])results.set(ch.nome,parsed);
+  }catch(e){
+    state.sourceResults.push({label:kind==='meuguia'?'Meu Guia Brasil':'Guia de TV Brasil',ok:false,error:e?.message||String(e),skipped:'probe/CORS'});
+    return results;
+  }
+  const worker=async()=>{
+    while(true){
+      const i=index++;if(i>=codesList.length)return;
+      const code=codesList[i];if(code===probeCode)continue;
+      try{
+        const html=await fetchText(urlFor(code),8000);
+        const programmes=kind==='meuguia'?parseMeuGuia(html):parseGuiaDeTv(html);
+        if(!programmes.length)throw new Error('Sem programas reconhecíveis');
+        for(const ch of entries.get(code)||[])results.set(ch.nome,programmes);
+        ok++;
+      }catch(e){failed++;}
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(4,codesList.length)},worker));
+  state.sourceResults.push({label:kind==='meuguia'?'Meu Guia Brasil':'Guia de TV Brasil',ok:ok>0,matched:results.size,programmes:[...results.values()].reduce((n,x)=>n+x.length,0),failedPages:failed});
+  return results;
+}
+
 function programmeLabel(p){
   if(!p)return '';
   const parts=[];
@@ -371,10 +475,16 @@ async function load(channels,force=false){
     const merged=new Map();
     const plutoMap=getPlutoMap(list);
     const wanted=list.filter(ch=>!plutoMapHasChannel(plutoMap,ch));
-    const sources=SOURCES[state.source]||SOURCES.saimo;
+    const epgConfig=await loadAcervoConfig();
+    const registeredSources=(epgConfig.sources||[])
+      .filter(x=>x.enabled&&x.format==='xmltv'&&x.url)
+      .sort((a,b)=>(Number(a.priority)||9999)-(Number(b.priority)||9999))
+      .map(x=>[x.name||x.id,x.url]);
+    if(state.source==='alternate')registeredSources.reverse();
+    const sources=registeredSources.length?registeredSources:(SOURCES[state.source]||SOURCES.default);
 
     /* Each source is isolated: one CORS/HTTP failure cannot hide data from the
-     * next source, matching Saimo's "fill the gaps" behaviour. */
+     * next source; a single upstream failure never aborts the other sources. */
     for(const [label,url] of sources){
       try{
         const xml=await fetchText(url);
@@ -382,7 +492,7 @@ async function load(channels,force=false){
         const pCount=[...parsed.map.values()].reduce((n,a)=>n+a.length,0);
         mergeParsed(merged,parsed.map);
         state.sourceResults.push({label,url,ok:true,matched:parsed.matched,programmes:pCount});
-        if(label==='Pluto TV'&&plutoMap.size){
+        if(label==='Pluto TV Brasil'&&plutoMap.size){
           const pp=parseXML(xml,list,{plutoIds:plutoMap});
           mergeParsed(merged,pp.map);
           state.sourceResults[state.sourceResults.length-1].matched=pp.matched||pp.map.size;
@@ -392,6 +502,12 @@ async function load(channels,force=false){
         console.warn('[CineHUB] EPG fonte indisponível',url,e);
       }
     }
+
+    // Channel-specific schedules override generic XMLTV where available.
+    const meuguia=await fetchMappedSchedules(wanted,epgConfig,'meuguia',merged);
+    meuguia.forEach((programmes,name)=>merged.set(name,programmes));
+    const guiadetv=await fetchMappedSchedules(wanted,epgConfig,'guiadetv',merged);
+    guiadetv.forEach((programmes,name)=>{if(!(merged.get(name)||[]).length)merged.set(name,programmes)});
 
     if(merged.size){apply(merged)}
     else{
@@ -423,7 +539,7 @@ function nowNext(name){
 }
 function forChannel(ch){return nowNext(ch?.nome||'')}
 function guide(ch,limit=8){return (state.programmes.get(ch?.nome||'')||[]).filter(p=>p.stop>Date.now()).slice(0,limit)}
-function sourceLabel(){return state.source==='iptvcom'?'EPG: Brasil':'EPG: Principal'}
+function sourceLabel(){return state.source==='alternate'?'EPG: Alternativo':'EPG: CineHUB'}
 
 window.CineHUBEPG={
   state,SOURCES,aliases,normalise,load,setSource,nowNext,forChannel,guide,sourceLabel,
