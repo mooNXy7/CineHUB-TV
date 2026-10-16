@@ -18,6 +18,7 @@ object SaimoContentRepository {
     private val urlRegex = Regex("""https?://[^\s|,<>"]+""", RegexOption.IGNORE_CASE)
 
     fun loadRadios(context: Context): List<RadioStation> {
+        loadAcervoRadios(context).takeIf { it.size >= 10 }?.let { return it }
         val cachedFile = File(context.cacheDir, "saimo-radios.txt")
         val cachedText = runCatching {
             cachedFile.takeIf { it.exists() && it.length() > 0L }?.readText(Charsets.UTF_8)
@@ -56,6 +57,49 @@ object SaimoContentRepository {
         }
         return result.distinctBy { normalize(it.name) }
             .sortedBy { it.name.lowercase(Locale("pt", "BR")) }
+    }
+
+
+    private fun loadAcervoRadios(context: Context): List<RadioStation> {
+        val cacheFile = File(context.cacheDir, "cinehub-radios.json")
+        val now = System.currentTimeMillis()
+        val cached = runCatching { cacheFile.takeIf { it.exists() && it.length() > 0L }?.readText(Charsets.UTF_8) }.getOrNull()
+        val fresh = cacheFile.exists() && now - cacheFile.lastModified() < 6L * 60L * 60L * 1000L
+        val raw = if (fresh && !cached.isNullOrBlank()) cached else {
+            val downloaded = runCatching {
+                val connection = (URL("https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/catalog/radios/radios.json").openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 6000
+                    readTimeout = 12000
+                    requestMethod = "GET"
+                    setRequestProperty("User-Agent", "CineHUB-TV/1.3.2")
+                }
+                try {
+                    if (connection.responseCode !in 200..299) throw IllegalStateException("ACERVO radios HTTP ${connection.responseCode}")
+                    connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                } finally { connection.disconnect() }
+            }.getOrNull()
+            val valid = downloaded?.let { parseAcervoRadios(it).size >= 10 } == true
+            if (valid) {
+                runCatching { cacheFile.writeText(downloaded!!, Charsets.UTF_8) }
+                downloaded
+            } else cached
+        }
+        return raw?.let { runCatching { parseAcervoRadios(it) }.getOrDefault(emptyList()) }.orEmpty()
+    }
+
+    private fun parseAcervoRadios(raw: String): List<RadioStation> {
+        val array = org.json.JSONObject(raw).optJSONArray("radios") ?: return emptyList()
+        val result = mutableListOf<RadioStation>()
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            val name = item.optString("name").trim()
+            val stream = item.optString("stream_url").trim()
+            val logo = item.optString("logo_url").takeIf { it.startsWith("http://") || it.startsWith("https://") }
+            if (name.isNotBlank() && (stream.startsWith("https://") || stream.startsWith("http://"))) {
+                result.add(RadioStation(name, stream, logo))
+            }
+        }
+        return result.distinctBy { normalize(it.name) }.sortedBy { it.name.lowercase(Locale("pt", "BR")) }
     }
 
     /**
