@@ -6,6 +6,10 @@ Aplicativo nativo para Android TV e TV Box. A versão oficial atual é **1.3.3**
 
 O manifesto usado pelo atualizador Kotlin é [update-kotlin.json](./update-kotlin.json). Ele aponta para o APK da release estável kotlin-v1.3.3 e inclui o SHA-256 publicado pelo GitHub para validar o download.
 
+## Validação contínua
+
+Pull requests para `main` executam a compilação do APK de depuração e verificam o pacote/versão antes da integração.
+
 ## Compilar
 
 Requisitos: JDK 17, Android SDK 36 e Gradle 8.14.3.
