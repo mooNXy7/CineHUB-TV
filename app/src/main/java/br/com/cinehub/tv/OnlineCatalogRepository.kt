@@ -150,6 +150,21 @@ object OnlineCatalogRepository {
         return stable
     }
 
+    /** Keep TV genres mutually exclusive: generic TV feeds must not leak anime or Korean dramas into Séries. */
+    private fun matchesSection(item: MediaItem, section: String): Boolean {
+        val isKorean = item.language.equals("ko", true) || item.countries.any { it.equals("KR", true) }
+        val isAnime = item.language.equals("ja", true) ||
+            (item.genreIds.contains(16) && item.language.isNotBlank() &&
+                item.language !in setOf("en", "pt", "es", "fr", "de", "it"))
+        return when (section) {
+            "Filmes" -> item.type == "movie"
+            "Séries" -> item.type != "movie" && !isKorean && !isAnime
+            "Animes" -> item.type != "movie" && isAnime
+            "Doramas" -> item.type != "movie" && isKorean
+            else -> true
+        }
+    }
+
     private fun legacyFeed(section: String): List<MediaItem> {
         val type = if (section == "Filmes") "movie" else "tv"
         val action = if (section == "Filmes") "now_playing" else "trending"
@@ -160,11 +175,7 @@ object OnlineCatalogRepository {
             val raw = results.optJSONObject(i) ?: continue
             val item = parseItem(raw, type) ?: continue
             if (item.poster.isNullOrBlank()) continue
-            when (section) {
-                "Animes" -> if (item.genreIds.contains(16) || item.language == "ja") items.add(item)
-                "Doramas" -> if (item.language == "ko" || item.countries.contains("KR")) items.add(item)
-                else -> items.add(item)
-            }
+            if (matchesSection(item, section)) items.add(item)
         }
         return items.distinctBy { it.id }.take(30)
     }
@@ -180,11 +191,7 @@ object OnlineCatalogRepository {
             val raw = results.optJSONObject(i) ?: continue
             val item = parseItem(raw, type) ?: continue
             if (item.poster.isNullOrBlank()) continue
-            when (section) {
-                "Animes" -> if (item.genreIds.contains(16) || item.language == "ja") items.add(item)
-                "Doramas" -> if (item.language == "ko" || item.countries.contains("KR")) items.add(item)
-                else -> items.add(item)
-            }
+            if (matchesSection(item, section)) items.add(item)
         }
         return items.distinctBy { it.id }.take(30)
     }
