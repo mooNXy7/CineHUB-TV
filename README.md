@@ -20,6 +20,7 @@ Para a versão assinada de produção, configure as variáveis de assinatura CIN
 
 - app/: aplicativo Kotlin nativo e player.
 - .github/workflows/kotlin-ota-release.yml: workflow de release oficial (mantido na branch de release).
+- .github/workflows/kotlin-pr-validation.yml: compilação e verificação automática do APK de teste em pull requests para main.
 - frontend/ e downloader-site/: interfaces e página de download.
 - android/: arquivos usados pela publicação do site; não é mais o projeto Android legado.
 
