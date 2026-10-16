@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="0"
+                android:startColor="#080808"
+                android:centerColor="#231014"
+                android:endColor="#080808"
+                android:type="linear" />
+        </shape>
+    </item>
+    <item
+        android:drawable="@drawable/cinehub_icon"
+        android:gravity="center"
+        android:width="180dp"
+        android:height="180dp" />
+</layer-list>

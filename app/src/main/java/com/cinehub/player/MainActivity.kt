@@ -197,6 +197,8 @@ class MainActivity : Activity() {
         }
         startActivity(Intent(this, PlayerActivity::class.java).apply {
             putExtra("url", url)
+            putExtra("title", url.substringAfter("://").substringBefore('/').ifBlank { "Stream direto" })
+            putExtra("content_type", if (live) "live" else "movie")
             putExtra("live", live)
             putExtra("content_id", url.hashCode().toString())
         })
@@ -487,6 +489,11 @@ class MainActivity : Activity() {
         }
         startActivity(Intent(this, PlayerActivity::class.java).apply {
             putStringArrayListExtra("sources", ArrayList(uniqueUrls))
+            putExtra("title", title)
+            putExtra("content_type", when (catalogCategory?.lowercase()) {
+                "series", "anime", "doramas", "dorama", "tv" -> "series"
+                else -> if (episodeQueue != null) "series" else "movie"
+            })
             if (sourceReferers.isNotEmpty()) {
                 putStringArrayListExtra("source_referers", ArrayList(uniqueUrls.map { url ->
                     sourceReferers.getOrNull(urls.indexOf(url)).orEmpty()

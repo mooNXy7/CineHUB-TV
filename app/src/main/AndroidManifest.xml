@@ -10,6 +10,7 @@
         android:label="CineHUB TV"
         android:icon="@drawable/cinehub_icon"
         android:roundIcon="@drawable/cinehub_icon"
+        android:banner="@drawable/cinehub_tv_banner"
         android:theme="@style/Theme.CineHUB"
         android:usesCleartextTraffic="true">
         <provider
@@ -26,7 +27,7 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:exported="false"
             android:screenOrientation="landscape"
-            android:theme="@style/Theme.CineHUB.Player" />
+            android:theme="@style/CineHUBPlayerTheme" />
         <activity
             android:name=".PlayerActivity"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
