@@ -52,7 +52,6 @@ jobs:
           set -euo pipefail
           test -n "$CINEHUB_TV_KEYSTORE_BASE64" || { echo "::error::Secret CINEHUB_TV_KEYSTORE_BASE64 is missing"; exit 1; }
           test -n "$CINEHUB_TV_KEYSTORE_PASSWORD" || { echo "::error::Secret CINEHUB_TV_KEYSTORE_PASSWORD is missing"; exit 1; }
-          test -n "$CINEHUB_TV_KEYSTORE_PASSWORD" || { echo "::error::Secret CINEHUB_TV_KEYSTORE_PASSWORD is missing"; exit 1; }
           test -n "$CINEHUB_TV_KEY_ALIAS" || { echo "::error::Secret CINEHUB_TV_KEY_ALIAS is missing"; exit 1; }
           test -n "$CINEHUB_TV_KEY_PASSWORD" || { echo "::error::Secret CINEHUB_TV_KEY_PASSWORD is missing"; exit 1; }
           printf '%s' "$CINEHUB_TV_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/cinehub-tv-release.jks"
@@ -114,11 +113,11 @@ jobs:
           generate_release_notes: true
           files: ${{ steps.verify.outputs.apk_name }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Publish official OTA manifest on main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           VERSION_NAME: ${{ steps.verify.outputs.version_name }}
           VERSION_CODE: ${{ steps.verify.outputs.version_code }}
           APK_NAME: ${{ steps.verify.outputs.apk_name }}
