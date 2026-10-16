@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
+
 android {
     namespace = "br.com.cinehub.tv"
     compileSdk = 36
@@ -11,18 +13,8 @@ android {
         applicationId = "br.com.cinehub.tv"
         minSdk = 23
         targetSdk = 28
-        versionCode = 132
-        versionName = "1.3.2"
-    }
-
-    buildTypes {
-        getByName("debug") {
-            applicationIdSuffix = ".test"
-            versionNameSuffix = "-player-test"
-        }
-        getByName("release") {
-            isMinifyEnabled = false
-        }
+        versionCode = 133
+        versionName = "1.3.3"
     }
 
     compileOptions {
@@ -31,7 +23,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
+    // The official release uses the same signing key as the installed production app.
     signingConfigs {
         if (!releaseStorePath.isNullOrBlank()) {
             create("release") {
@@ -42,6 +34,20 @@ android {
             }
         }
     }
+
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-player-test"
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!releaseStorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
     lint {
         disable += "ExpiredTargetSdkVersion"
     }
@@ -64,6 +70,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("io.coil-kt:coil:2.7.0")
     implementation("io.coil-kt.coil3:coil:3.4.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
+    implementation("io.coil-kt.coil-network-okhttp:3.4.0")
     testImplementation("junit:junit:4.13.2")
 }
