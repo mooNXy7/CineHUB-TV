@@ -15,11 +15,10 @@ android {
         versionName = "1.3.2"
     }
 
-    // The test APK installs alongside the official app and cannot replace its package.
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
+            versionNameSuffix = "-player-test"
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -32,8 +31,6 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
 
-    // Release signing is enabled only when the CI signing-key environment is present.
-    // Debug builds remain independent from release credentials.
     val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
     signingConfigs {
         if (!releaseStorePath.isNullOrBlank()) {
@@ -45,18 +42,19 @@ android {
             }
         }
     }
-    // This APK is distributed directly, not through Google Play. Keep the tested TV targetSdk
-    // unchanged and suppress only Play-store target-SDK policy lint for sideloaded releases.
     lint {
         disable += "ExpiredTargetSdkVersion"
     }
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("androidx.media3:media3-exoplayer:1.5.1")
-    implementation("androidx.media3:media3-exoplayer-hls:1.5.1")
-    implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.media3:media3-exoplayer:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-hls:1.11.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.11.1")
+    implementation("androidx.media3:media3-ui:1.11.1")
+    implementation("androidx.media3:media3-session:1.11.1")
     implementation("io.coil-kt:coil:2.7.0")
+    testImplementation("junit:junit:4.13.2")
 }
