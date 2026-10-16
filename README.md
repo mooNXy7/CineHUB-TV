@@ -1,36 +1,28 @@
-# CineHUB TV — reconstrução nativa
+# CineHUB TV — Kotlin oficial
 
-Fundação nativa em Kotlin para Android TV / TV Box. O desenvolvimento ocorre nesta branch separada para não substituir a versão estável.
+Aplicativo nativo para Android TV e TV Box. A versão oficial atual é **1.3.3** (versionCode 133), com player Media3/ExoPlayer.
 
-## Implementado nesta etapa
+## OTA oficial
 
-- [x] Estrutura Android Gradle/Kotlin e tema escuro/vermelho
-- [x] Navegação inicial com foco por controle remoto
-- [x] Leitor do formato de catálogo `canal:`, `categoria:`, `logo:`, `fonte:`
-- [x] Carregamento assíncrono do catálogo público de referência do SaimoPlayer
-- [x] Tela inicial de Ao vivo com canais agrupados por categoria
-- [x] Tela de reprodução com Media3/ExoPlayer e tentativa automática das fontes alternativas
-- [x] Workflow GitHub Actions com APK de depuração gerado com sucesso
+O manifesto usado pelo atualizador Kotlin é [update-kotlin.json](./update-kotlin.json). Ele aponta para o APK da release estável kotlin-v1.3.3 e inclui o SHA-256 publicado pelo GitHub para validar o download.
 
-## Ainda em desenvolvimento
+## Compilar
 
-- [x] Confirmada a compilação de depuração no GitHub Actions
-- [ ] Integrar logos PNG oficiais do CineHUB nos recursos Android
-- [x] Fallback automático entre as URLs cadastradas no canal (ainda sem teste em aparelho)
-- [ ] Busca, filtros e navegação de catálogo sem sobrecarregar TV Boxes fracas
-- [ ] Guia EPG/XMLTV
-- [ ] Filmes, séries, animes, doramas, favoritos, histórico e rádios
-- [ ] Testes reais de instalação e reprodução em Android TV/TV Box
+Requisitos: JDK 17, Android SDK 36 e Gradle 8.14.3.
 
-**Importante:** fontes públicas podem falhar, exigir cabeçalhos específicos ou não ter autorização de distribuição. O player tenta as fontes em sequência quando uma falha. Algumas fontes podem exigir cabeçalhos especiais (Referer/User-Agent) que ainda não estão integrados, e o build ainda precisa de teste em aparelho real. Não considerar esta branch uma versão final.
+```bash
+gradle :app:assembleDebug --no-daemon
+```
 
-## Build
+Para a versão assinada de produção, configure as variáveis de assinatura CINEHUB_TV_KEYSTORE_BASE64, CINEHUB_TV_KEYSTORE_PASSWORD, CINEHUB_TV_KEY_ALIAS e CINEHUB_TV_KEY_PASSWORD no workflow oficial.
 
-O workflow usa JDK 17 e Gradle 8.9 para executar `assembleDebug`. O APK gerado é de depuração e não é o pacote oficial de lançamento.
+## Estrutura
 
-## Referências de arquitetura e dados
+- app/: aplicativo Kotlin nativo e player.
+- .github/workflows/kotlin-ota-release.yml: workflow de release oficial (mantido na branch de release).
+- frontend/ e downloader-site/: interfaces e página de download.
+- android/: arquivos usados pela publicação do site; não é mais o projeto Android legado.
 
-- [SaimoTV Android](https://github.com/gabrielsaimo/SaimoTV-Android)
-- [SaimoPlayer e catálogo](https://github.com/gabrielsaimo/SaimoPlayer)
+## Histórico
 
-A adaptação deve preservar os créditos/licenças aplicáveis e manter identidade visual própria do CineHUB.
+O projeto WebView 1.2.9 foi legado e separado do aplicativo Kotlin (pacote br.com.cinehub.tv). O código WebView foi retirado da árvore ativa nesta migração. A release histórica/tag antiga é preservada para auditoria e rollback; isso não a torna a versão atual nem altera o OTA Kotlin.
