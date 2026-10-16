@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.text.InputType
 import android.util.TypedValue
+import android.util.Log
 import android.view.Gravity
 import android.os.Bundle
 import android.view.KeyEvent
@@ -110,6 +111,7 @@ class PlayerActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try {
         CatalogClient.initialize(applicationContext)
         window.decorView.systemUiVisibility =
             View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -391,6 +393,27 @@ class PlayerActivity : Activity() {
             }
         playSource(0)
         loadIntroMarkers()
+        } catch (failure: Throwable) {
+            Log.e("CINEHUB_PLAYER_STARTUP_CRASH", "Player startup failed", failure)
+            val details = buildString {
+                append(failure.javaClass.name)
+                append("\n")
+                append(failure.message ?: "Sem mensagem de erro")
+                append("\n\n")
+                append(Log.getStackTraceString(failure).take(4200))
+            }
+            runCatching {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Falha ao iniciar o player")
+                    .setMessage(details)
+                    .setCancelable(false)
+                    .setPositiveButton("Voltar") { _, _ -> finish() }
+                    .show()
+            }.onFailure {
+                Toast.makeText(this, "Falha no player: ${failure.javaClass.simpleName}: ${failure.message}", Toast.LENGTH_LONG).show()
+                finish()
+            }
+        }
     }
 
     override fun onUserInteraction() {
