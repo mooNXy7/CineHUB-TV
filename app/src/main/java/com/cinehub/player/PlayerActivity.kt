@@ -27,14 +27,17 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
+import com.cinehub.player.saimo.Playback as SaimoPlayback
+import com.cinehub.player.saimo.Source as SaimoSource
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import org.json.JSONArray
 import org.json.JSONObject
@@ -54,7 +57,6 @@ import java.util.concurrent.Executors
 class PlayerActivity : Activity() {
     private lateinit var playerView: PlayerView
     private var player: ExoPlayer? = null
-    private var httpDataSourceFactory: DefaultHttpDataSource.Factory? = null
     private var sourceUrls: List<String> = emptyList()
     private var sourceReferers: List<String> = emptyList()
     private var attempted = mutableSetOf<String>()
@@ -104,6 +106,7 @@ class PlayerActivity : Activity() {
     private var nextEpisodeRunnable: Runnable? = null
     private var nextPromptShown = false
     private var failureDialogShown = false
+    private var lastPlaybackErrorMessage: String? = null
     private var stillWatchingRunnable: Runnable? = null
     private var stillWatchingDialog: android.app.AlertDialog? = null
     private var progressSaveRunnable: Runnable? = null
@@ -251,8 +254,12 @@ class PlayerActivity : Activity() {
         TvUi.style(root)
 
         if (sourceUrls.isEmpty()) {
-            Toast.makeText(this, "Nenhuma fonte de reprodução recebida.", Toast.LENGTH_LONG).show()
-            finish()
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Nenhuma fonte válida")
+                .setMessage("O catálogo não entregou uma URL HTTP(S) que o player consiga abrir.")
+                .setCancelable(false)
+                .setPositiveButton("Voltar ao catálogo") { _, _ -> finish() }
+                .show()
             return
         }
 
@@ -288,17 +295,7 @@ class PlayerActivity : Activity() {
             .setPrioritizeTimeOverSizeThresholds(!lowMemory)
             .build()
 
-        // Media3's default HTTP client sends a browser-like Accept header and a
-        // stable Android TV user-agent. Some HLS origins reject requests without Accept.
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(
-                "Mozilla/5.0 (Linux; Android 11; Android TV) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CineHUB-PLAYER/0.2"
-            )
-            .setDefaultRequestProperties(mapOf("Accept" to "*/*"))
-        httpDataSourceFactory = httpFactory
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(httpFactory))
             .setRenderersFactory(DefaultRenderersFactory(this).setEnableDecoderFallback(true))
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
@@ -306,6 +303,7 @@ class PlayerActivity : Activity() {
                 if (!isRadio) playerView.player = exo
                 exo.addListener(object : Player.Listener {
                     override fun onPlayerError(error: PlaybackException) {
+                        lastPlaybackErrorMessage = "${error.errorCodeName}: ${error.message.orEmpty()}"
                         if (isRadio) radioExperience?.setPlaybackState(false, errorMessage = "Falha no sinal. Tentando outra fonte…")
                         tryNextSource()
                     }
@@ -947,8 +945,7 @@ class PlayerActivity : Activity() {
 
     private fun playSource(index: Int) {
         if (index !in sourceUrls.indices) {
-            Toast.makeText(this, "Todas as fontes disponíveis falharam.", Toast.LENGTH_LONG).show()
-            finish()
+            showPlaybackFailureDialog()
             return
         }
         currentIndex = index
@@ -981,7 +978,6 @@ class PlayerActivity : Activity() {
                         sourceRequestToken != requestToken || url !in attempted
                     ) return@runOnUiThread
                     startSourcePlayback(
-                        originalUrl = url,
                         playbackUrl = resolved.url,
                         resolvedReferer = resolved.referer,
                         resolvedMimeType = resolved.mimeType
@@ -989,44 +985,23 @@ class PlayerActivity : Activity() {
                 }
             }
         } else {
-            startSourcePlayback(originalUrl = url, playbackUrl = url)
+            startSourcePlayback(playbackUrl = url)
         }
     }
 
     private fun startSourcePlayback(
-        originalUrl: String,
         playbackUrl: String,
         resolvedReferer: String? = null,
         resolvedMimeType: String? = null
     ) {
         startupCheck?.let(handler::removeCallbacks)
         startupCheck = null
-        val host = runCatching { Uri.parse(originalUrl).host.orEmpty().lowercase() }.getOrDefault("")
-        val requestHeaders = linkedMapOf("Accept" to "*/*")
         val declaredReferer = sourceReferers.getOrNull(currentIndex).orEmpty()
             .ifBlank { resolvedReferer.orEmpty() }
-        if (PlaybackUrlPolicy.isSafeHttpUrl(declaredReferer)) {
-            requestHeaders["Referer"] = declaredReferer
-            val refererUri = runCatching { Uri.parse(declaredReferer) }.getOrNull()
-            if (refererUri != null && !refererUri.host.isNullOrBlank()) {
-                requestHeaders["Origin"] = "${refererUri.scheme}://${refererUri.host}"
-            }
-        }
-        when {
-            host == "embedplayer2.xyz" || host.endsWith(".embedplayer2.xyz") -> {
-                if (requestHeaders["Referer"].isNullOrBlank()) requestHeaders["Referer"] = "https://embedplayer2.xyz/"
-                if (requestHeaders["Origin"].isNullOrBlank()) requestHeaders["Origin"] = "https://embedplayer2.xyz"
-            }
-            host == "dadinhodetapioca.fun" || host.endsWith(".dadinhodetapioca.fun") -> {
-                if (requestHeaders["Referer"].isNullOrBlank()) requestHeaders["Referer"] = "https://dadinhodetapioca.fun/"
-                if (requestHeaders["Origin"].isNullOrBlank()) requestHeaders["Origin"] = "https://dadinhodetapioca.fun"
-            }
-        }
-        httpDataSourceFactory?.setDefaultRequestProperties(requestHeaders)
         player?.apply {
             stop()
             clearMediaItems()
-            setMediaItem(buildMediaItem(playbackUrl, resolvedMimeType))
+            setMediaSource(createMediaSource(playbackUrl, resolvedMimeType, declaredReferer))
             prepare()
             playWhenReady = true
         }
@@ -1199,6 +1174,26 @@ class PlayerActivity : Activity() {
         }.getOrDefault(pageUrl)
     }
 
+    private fun createMediaSource(
+        url: String,
+        mimeTypeOverride: String? = null,
+        refererOverride: String? = null
+    ): MediaSource {
+        val referer = refererOverride?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl)
+            ?: sourceReferers.getOrNull(currentIndex)?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl)
+        val source = SaimoSource(
+            url = url,
+            referer = referer,
+            userAgent = "Mozilla/5.0 (Linux; Android 11; Android TV) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CineHUB-TV"
+        )
+        val networkFactory = SaimoPlayback.dataSourceFactory(source)
+        val localAwareFactory = DefaultDataSource.Factory(this, networkFactory)
+        return DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(localAwareFactory)
+            .createMediaSource(buildMediaItem(url, mimeTypeOverride))
+    }
+
     private fun buildMediaItem(url: String, mimeTypeOverride: String? = null): MediaItem {
         val itemBuilder = MediaItem.Builder().setUri(Uri.parse(url))
         val parsedUri = Uri.parse(url)
@@ -1209,8 +1204,9 @@ class PlayerActivity : Activity() {
         // its master playlist is exposed as master.txt instead of .m3u8.
         val isEmbedPlayerHls = parsedUri.host.orEmpty().equals("embedplayer2.xyz", ignoreCase = true) &&
             parsedUri.path.orEmpty().contains("/cdn/hls/", ignoreCase = true)
+        val isTextHlsManifest = parsedUri.path.orEmpty().endsWith(".txt", ignoreCase = true)
         val inferredMime = mimeTypeOverride ?: when {
-            lowerUrl.contains(".m3u8") || nestedUrl.contains(".m3u8") || isEmbedPlayerHls -> MimeTypes.APPLICATION_M3U8
+            lowerUrl.contains(".m3u8") || nestedUrl.contains(".m3u8") || isEmbedPlayerHls || isTextHlsManifest -> MimeTypes.APPLICATION_M3U8
             lowerUrl.contains(".mpd") || nestedUrl.contains(".mpd") -> MimeTypes.APPLICATION_MPD
             lowerUrl.substringBefore('?').endsWith(".mp4") -> MimeTypes.VIDEO_MP4
             else -> null
@@ -1397,7 +1393,7 @@ class PlayerActivity : Activity() {
     private fun reloadCurrentMediaItemWithSubtitle() {
         val url = sourceUrls.getOrNull(currentIndex) ?: return
         val position = player?.currentPosition ?: 0L
-        player?.setMediaItem(buildMediaItem(url), position)
+        player?.setMediaSource(createMediaSource(url), position)
         player?.prepare()
         player?.playWhenReady = true
     }
@@ -1503,8 +1499,32 @@ class PlayerActivity : Activity() {
             return
         }
 
-        Toast.makeText(this, "Não foi possível reproduzir este conteúdo.", Toast.LENGTH_LONG).show()
-        finish()
+        showPlaybackFailureDialog()
+    }
+
+    private fun showPlaybackFailureDialog() {
+        if (isFinishing || failureDialogShown) return
+        failureDialogShown = true
+        val detail = lastPlaybackErrorMessage?.takeIf { it.isNotBlank() }
+            ?: "Nenhuma fonte respondeu dentro do tempo limite configurado."
+        val message = "O CineHUB tentou ${attempted.size} fonte(s), mas nenhuma iniciou.\n\nDetalhe técnico: $detail"
+        val dialog = android.app.AlertDialog.Builder(this)
+            .setTitle("Não foi possível reproduzir")
+            .setMessage(message)
+            .setCancelable(true)
+            .setPositiveButton("Tentar novamente") { _, _ ->
+                startupCheck?.let(handler::removeCallbacks)
+                startupCheck = null
+                attempted.clear()
+                currentIndex = 0
+                lastPlaybackErrorMessage = null
+                failureDialogShown = false
+                playSource(0)
+            }
+            .setNegativeButton("Voltar ao catálogo") { _, _ -> finish() }
+            .create()
+        dialog.setOnCancelListener { failureDialogShown = false }
+        dialog.show()
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
