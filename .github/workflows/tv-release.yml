@@ -1,143 +1,17 @@
-name: CineHUB TV 1.2.9 — TV layout test
+name: Legacy CineHUB TV 1.2.9 Release — Disabled
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "frontend/**"
-      - "android/CineHUB-TV/src/main/assets/cinehub/**"
-      - "android/CineHUB-TV/build.gradle.kts"
-      - "android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java"
-      - "android/CineHUB-TV/src/main/java/com/cinehub/tv/*.kt"
-      - "android/build.gradle.kts"
-      - ".github/workflows/tv-release.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: cinehub-tv-release
-  cancel-in-progress: true
+  contents: read
 
 jobs:
-  build-and-release:
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout CineHUB TV
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Prepare Java and Gradle
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Configure Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.11.1"
-
-      - name: Set test version
-        shell: bash
+      - name: Prevent publishing the legacy WebView build
         run: |
-          set -euo pipefail
-          sed -i -E 's/versionCode = [0-9]+/versionCode = 129/; s/versionName = "[^"]+"/versionName = "1.2.9"/' android/CineHUB-TV/build.gradle.kts
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path("android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java")
-          s = p.read_text(encoding="utf-8")
-          s = re.sub(r"CURRENT_VERSION_CODE=\d+", "CURRENT_VERSION_CODE=129", s)
-          s = re.sub(r"CineHUB-TV/1\.[0-9.]+", "CineHUB-TV/1.2.9", s)
-          p.write_text(s, encoding="utf-8")
-          p = Path("android/CineHUB-TV/src/main/assets/cinehub/index.html")
-          s = p.read_text(encoding="utf-8")
-          s = s.replace("CineHUB TV 1.2.7", "CineHUB TV 1.2.9").replace("VERSÃO 1.2.7", "VERSÃO 1.2.9")
-          p.write_text(s, encoding="utf-8")
-          Path("android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt").write_text("1.2.9\n", encoding="utf-8")
-          PY
-          grep -q 'versionCode = 129' android/CineHUB-TV/build.gradle.kts
-          grep -q 'versionName = "1.2.9"' android/CineHUB-TV/build.gradle.kts
-grep -q 'versionCode = 129' android/CineHUB-TV/build.gradle.kts
-
-      - name: Decode official signing key
-        env:
-          CINEHUB_TV_KEYSTORE_BASE64: ${{ secrets.CINEHUB_TV_KEYSTORE_BASE64 }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$CINEHUB_TV_KEYSTORE_BASE64"
-          printf '%s' "$CINEHUB_TV_KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/cinehub-tv-release.jks"
-          test -s "$GITHUB_WORKSPACE/cinehub-tv-release.jks"
-
-      - name: Build signed APK
-        working-directory: android
-        env:
-          CINEHUB_TV_KEYSTORE_PATH: ${{ github.workspace }}/cinehub-tv-release.jks
-          CINEHUB_TV_KEYSTORE_PASSWORD: ${{ secrets.CINEHUB_TV_KEYSTORE_PASSWORD }}
-          CINEHUB_TV_KEY_ALIAS: ${{ secrets.CINEHUB_TV_KEY_ALIAS }}
-          CINEHUB_TV_KEY_PASSWORD: ${{ secrets.CINEHUB_TV_KEY_PASSWORD }}
-        run: gradle :CineHUB-TV:assembleRelease --no-daemon --stacktrace
-
-      - name: Validate APK and signature
-        shell: bash
-        run: |
-          set -euo pipefail
-          APK="$(find android/CineHUB-TV/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)"
-          test -s "$APK"
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          ZIPALIGN="$(find "$ANDROID_HOME/build-tools" -type f -name zipalign | sort -V | tail -n 1)"
-          "$ZIPALIGN" -c -P 16 -v 4 "$APK"
-          "$APKSIGNER" verify --verbose "$APK"
-          mkdir -p release
-          cp "$APK" release/CineHUB-TV-v1.2.9.apk
-          cp "$APK" release/CineHUB-TV.apk
-          sha256sum release/CineHUB-TV-v1.2.9.apk release/CineHUB-TV.apk > release/SHA256SUMS.txt
-          SHA="$(sha256sum release/CineHUB-TV-v1.2.9.apk | awk '{print $1}')"
-          python3 - "$SHA" <<'PY'
-          import json, sys
-          from pathlib import Path
-          sha = sys.argv[1]
-          data = {
-            "app": "CineHUB TV",
-            "version": "1.2.9",
-            "versionCode": 129,
-            "releaseUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/tag/v1.2.9",
-            "apkUrl": "https://github.com/mooNXy7/CineHUB-TV/releases/download/v1.2.9/CineHUB-TV-v1.2.9.apk",
-            "sha256": sha,
-            "channel": "stable"
-          }
-          Path("update.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
-          PY
-
-      - name: Publish test release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.2.9
-          name: CineHUB TV v1.2.9 — Teste de layout para TV
-          body: |
-            Versão experimental para investigar o dimensionamento da interface em Android TV/WebView.
-            Primeira etapa da migração nativa: habilita Kotlin e centraliza o modo imersivo Android; a interface web permanece temporariamente para evitar perda de funcionalidades.
-            Teste na televisão antes de considerar esta versão validada.
-          files: |
-            release/CineHUB-TV-v1.2.9.apk
-            release/CineHUB-TV.apk
-            release/SHA256SUMS.txt
-          draft: false
-          prerelease: true
-          fail_on_unmatched_files: true
-
-      - name: Update OTA manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update.json android/CineHUB-TV/build.gradle.kts android/CineHUB-TV/src/main/java/com/cinehub/tv/MainActivity.java android/CineHUB-TV/src/main/assets/cinehub/index.html android/CineHUB-TV/src/main/assets/cinehub/CINEHUB_VERSION.txt
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(tv): prepare CineHUB TV 1.2.9 test build"
-            git push origin HEAD:main
-          fi
+          echo "This legacy 1.2.9 workflow is intentionally disabled."
+          echo "It must not publish or overwrite the official Kotlin TV build."
+          echo "Restore a release workflow only after the intended Kotlin 0.2.x source and version are present in this repository."
