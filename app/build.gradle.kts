@@ -17,21 +17,6 @@ android {
         versionName = "1.3.2"
     }
 
-    // The test APK installs alongside the official app and cannot replace its package.
-    buildTypes {
-        getByName("debug") {
-            applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
-        }
-        getByName("release") {
-            isMinifyEnabled = false
-            // Explicitly bind the official release variant to the CI-provided signing key.
-            if (!releaseStorePath.isNullOrBlank()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -50,6 +35,21 @@ android {
             }
         }
     }
+    // The test APK installs alongside the official app and cannot replace its package.
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            // Explicitly bind the official release variant to the CI-provided signing key.
+            if (!releaseStorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
     // This APK is distributed directly, not through Google Play. Keep the tested TV targetSdk
     // unchanged and suppress only Play-store target-SDK policy lint for sideloaded releases.
     lint {
