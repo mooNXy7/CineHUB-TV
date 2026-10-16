@@ -1265,8 +1265,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(d(0), d(12), d(0), d(8))
         })
         content.addView(label("Pesquise por nome ou categoria. Se um canal tiver mais de uma fonte, o player tentará alternativas quando necessário.", 14, MUTED, false).apply {
-            setPadding(d(0), d(0), d(0), d(14))
+            setPadding(d(0), d(0), d(0), d(10))
         })
+        val guideButton = label("▦  Guia de programação", 15, WHITE, true).apply {
+            setPadding(d(18), d(12), d(18), d(12))
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { showLiveGuide() }
+        }
+        content.addView(guideButton, LinearLayout.LayoutParams(-1, d(50)).apply { bottomMargin = d(10) })
         val search = EditText(this).apply {
             hint = "Buscar canal…"
             setSingleLine(true)
@@ -1308,6 +1316,82 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     status.text = "Não foi possível carregar o catálogo. Confira a internet e tente novamente."
+                }
+            }
+        }
+    }
+
+
+    private fun showLiveGuide() {
+        content.removeAllViews()
+        content.addView(label("Guia de programação", 26, WHITE, true).apply {
+            setPadding(d(0), d(10), d(0), d(6))
+        })
+        val back = label("←  Voltar aos canais ao vivo", 15, WHITE, true).apply {
+            setPadding(d(16), d(10), d(16), d(10))
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { showLiveChannels() }
+        }
+        content.addView(back, LinearLayout.LayoutParams(-1, d(48)).apply { bottomMargin = d(8) })
+        val status = label("Carregando programação do CineHUB ACERVO…", 14, MUTED, false).apply {
+            setPadding(d(2), d(8), d(0), d(10))
+        }
+        content.addView(status)
+        val guideRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(guideRows)
+
+        io.execute {
+            val loadedChannels = if (channels.isNotEmpty()) channels
+                else runCatching { CatalogRepository.loadChannels() }.getOrDefault(emptyList())
+            val schedule = runCatching { EpgRepository.load(this@MainActivity) }.getOrDefault(emptyMap())
+            val now = System.currentTimeMillis()
+            val entries = loadedChannels.mapNotNull { channel ->
+                val programmes = EpgRepository.programmesFor(channel, schedule)
+                    .filter { it.endMillis > now }
+                    .take(6)
+                if (programmes.isEmpty()) null else channel to programmes
+            }.sortedBy { it.first.name.lowercase(Locale.ROOT) }
+
+            runOnUiThread {
+                if (currentSection != "Ao vivo" || isFinishing || isDestroyed) return@runOnUiThread
+                channels = loadedChannels
+                guideRows.removeAllViews()
+                status.text = if (entries.isEmpty()) {
+                    "A programação não está disponível neste momento. Tente novamente quando a conexão voltar."
+                } else {
+                    "Programação disponível para ${entries.size} canais · horários de Brasília."
+                }
+                entries.forEach { (channel, programmes) ->
+                    val card = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        background = focusBackground(PANEL)
+                        setPadding(d(16), d(12), d(16), d(12))
+                        isFocusable = channel.sources.isNotEmpty()
+                        isFocusableInTouchMode = channel.sources.isNotEmpty()
+                        if (channel.sources.isNotEmpty()) setOnClickListener {
+                            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                                putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(channel.sources))
+                                putExtra(PlayerActivity.EXTRA_URL, channel.primarySource)
+                                putExtra(PlayerActivity.EXTRA_TITLE, channel.name)
+                            })
+                        }
+                    }
+                    card.addView(label(channel.name, 17, WHITE, true).apply { setPadding(d(0), d(0), d(0), d(6)) })
+                    programmes.forEach { programme ->
+                        val current = now >= programme.startMillis && now < programme.endMillis
+                        val line = "${EpgRepository.timeLabel(programme.startMillis)}–${EpgRepository.timeLabel(programme.endMillis)}  •  ${programme.title}"
+                        card.addView(label(if (current) "AGORA  •  $line" else line, 14, if (current) RED else WHITE, current).apply {
+                            setPadding(d(0), d(3), d(0), d(3))
+                        })
+                        if (current && programme.description.isNotBlank()) {
+                            card.addView(label(programme.description.take(180), 12, MUTED, false).apply {
+                                setPadding(d(0), d(0), d(0), d(3))
+                            })
+                        }
+                    }
+                    guideRows.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = d(8) })
                 }
             }
         }
