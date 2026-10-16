@@ -1,4 +1,4 @@
-name: CineHUB TV 1.3.2 Player Upgrade Test APK
+name: CineHUB TV 1.3.4 Home Visual Test APK
 
 on:
   push:
@@ -54,10 +54,10 @@ jobs:
           VERSION_CODE="$("$APKANALYZER" manifest version-code "$APK")"
           VERSION_NAME="$("$APKANALYZER" manifest version-name "$APK")"
           test "$APP_ID" = "br.com.cinehub.tv.test" || { echo "::error::Unexpected test applicationId: $APP_ID"; exit 1; }
-          test "$VERSION_CODE" = "132" || { echo "::error::Unexpected test versionCode: $VERSION_CODE"; exit 1; }
-          test "$VERSION_NAME" = "1.3.2-player-test" || { echo "::error::Unexpected test versionName: $VERSION_NAME"; exit 1; }
-          cp "$APK" "CineHUB-TV-1.3.2-test-PLAYER.apk"
-          sha256sum "CineHUB-TV-1.3.2-test-PLAYER.apk" | tee "CineHUB-TV-1.3.2-test-PLAYER.sha256"
+          test "$VERSION_CODE" = "134" || { echo "::error::Unexpected test versionCode: $VERSION_CODE"; exit 1; }
+          test "$VERSION_NAME" = "1.3.4-home-test-debug" || { echo "::error::Unexpected test versionName: $VERSION_NAME"; exit 1; }
+          cp "$APK" "CineHUB-TV-1.3.4-HOME-TEST.apk"
+          sha256sum "CineHUB-TV-1.3.4-HOME-TEST.apk" | tee "CineHUB-TV-1.3.4-HOME-TEST.sha256"
           echo "Verified isolated test package $APP_ID ($VERSION_NAME, code $VERSION_CODE). No release or OTA manifest is published."
 
       - name: Upload APK test artifact
