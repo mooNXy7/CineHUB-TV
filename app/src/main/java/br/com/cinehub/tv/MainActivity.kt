@@ -1632,7 +1632,9 @@ private fun showMyList() {
             this.text = text
             textSize = size.toFloat()
             setTextColor(color)
-            if (bold) setTypeface(typeface, Typeface.BOLD)
+            typeface = Typeface.create("sans-serif", if (bold) Typeface.BOLD else Typeface.NORMAL)
+            letterSpacing = if (bold && size >= 12) 0.015f else 0f
+            includeFontPadding = false
             gravity = Gravity.CENTER_VERTICAL
         }
 
