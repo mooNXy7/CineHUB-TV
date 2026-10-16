@@ -67,11 +67,13 @@ class MainActivity : AppCompatActivity() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(BG)
-            setPadding(d(42), d(20), d(42), d(20))
+            setPadding(0, 0, 0, 0)
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(d(42), d(10), d(42), 0)
+            setBackgroundColor(0xB8080808.toInt())
         }
         header.addView(label("Cine", 28, WHITE, true))
         header.addView(label("HUB", 28, RED, true))
@@ -82,7 +84,11 @@ class MainActivity : AppCompatActivity() {
         clockTick.run()
         root.addView(header, LinearLayout.LayoutParams(-1, d(54)))
 
-        val navScroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val navScroll = HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setPadding(d(28), 0, d(28), 0)
+            setBackgroundColor(0x99080808.toInt())
+        }
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         sections.forEach { title ->
             val item = label(title, 15, if (title == currentSection) WHITE else MUTED, title == currentSection).apply {
@@ -107,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             clipChildren = false
             clipToPadding = false
-            setPadding(d(0), d(20), d(0), d(28))
+            setPadding(d(0), d(0), d(0), d(28))
         }
         scroll.addView(content)
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
