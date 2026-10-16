@@ -805,6 +805,8 @@ class MainActivity : AppCompatActivity() {
                             putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, arrayListOf(station.streamUrl))
                             putExtra(PlayerActivity.EXTRA_URL, station.streamUrl)
                             putExtra(PlayerActivity.EXTRA_TITLE, station.name)
+                            putExtra("cinehub_radio", true)
+                            putExtra(PlayerActivity.EXTRA_MEDIA_TYPE, "radio")
                         })
                     }
                     content.addView(row, LinearLayout.LayoutParams(-1, d(68)).apply { bottomMargin = d(5) })
