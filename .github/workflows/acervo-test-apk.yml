@@ -48,7 +48,7 @@ jobs:
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          APKANALYZER="$(find "$ANDROID_HOME" -type f -name apkanalyzer | head -n 1)"
+          APKANALYZER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name apkanalyzer -print -quit)"
           test -x "$APKANALYZER"
           APP_ID="$("$APKANALYZER" manifest application-id "$APK")"
           VERSION_CODE="$("$APKANALYZER" manifest version-code "$APK")"
