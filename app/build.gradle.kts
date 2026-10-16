@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
+
 android {
     namespace = "br.com.cinehub.tv"
     compileSdk = 35
@@ -38,7 +40,6 @@ android {
 
     // Release signing is enabled only when the CI signing-key environment is present.
     // Debug builds remain independent from release credentials.
-    val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
     signingConfigs {
         if (!releaseStorePath.isNullOrBlank()) {
             create("release") {
