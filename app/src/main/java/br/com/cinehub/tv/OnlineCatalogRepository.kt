@@ -95,7 +95,15 @@ object OnlineCatalogRepository {
             val title = item.optString("title").trim().ifBlank { item.optString("name").trim() }
             if (id.isBlank() || title.isBlank()) continue
             val poster = image(item.optString("poster_url"))
+                ?: image(item.optString("poster_path"))
+            val backdrop = image(item.optString("backdrop_url"), "w1280")
+                ?: image(item.optString("backdrop_path"), "w1280")
+                ?: poster
             val year = item.optString("year").takeIf { it.isNotBlank() && it != "null" }.orEmpty()
+            val rawRating = item.optDouble("vote_average", item.optDouble("rating", 0.0))
+            val rating = if (rawRating > 0.0) String.format(Locale.US, "%.1f", rawRating) else "—"
+            val description = listOf("overview", "synopsis", "description", "overview_pt")
+                .firstNotNullOfOrNull { key -> item.optString(key).takeIf { it.isNotBlank() && it != "null" } }.orEmpty()
             val genresArray = item.optJSONArray("genres")
             val genreIds = mutableSetOf<Int>()
             val genreNames = mutableSetOf<String>()
@@ -133,13 +141,16 @@ object OnlineCatalogRepository {
                 title = title,
                 type = type,
                 poster = poster,
-                backdrop = poster,
+                backdrop = backdrop,
                 year = year,
-                rating = "—",
-                description = "",
+                rating = rating,
+                description = description,
                 genreIds = genreIds,
-                language = when (category) { "anime" -> "ja"; "doramas" -> "ko"; else -> "" },
-                countries = if (category == "doramas") setOf("KR") else emptySet(),
+                language = item.optString("original_language").takeIf { it.isNotBlank() && it != "null" }
+                    ?: when (category) { "anime" -> "ja"; "doramas" -> "ko"; else -> "" },
+                countries = item.optJSONArray("origin_country")?.let { arr ->
+                    (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }.toSet()
+                }?.takeIf { it.isNotEmpty() } ?: if (category == "doramas") setOf("KR") else emptySet(),
                 playbackSources = playbackSources.distinct(),
                 genreNames = genreNames
             ))
