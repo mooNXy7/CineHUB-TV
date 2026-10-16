@@ -382,7 +382,7 @@ async function load(channels,force=false){
         const pCount=[...parsed.map.values()].reduce((n,a)=>n+a.length,0);
         mergeParsed(merged,parsed.map);
         state.sourceResults.push({label,url,ok:true,matched:parsed.matched,programmes:pCount});
-        if(label==='Pluto TV'&&plutoMap.size){
+        if(label==='Pluto TV Brasil'&&plutoMap.size){
           const pp=parseXML(xml,list,{plutoIds:plutoMap});
           mergeParsed(merged,pp.map);
           state.sourceResults[state.sourceResults.length-1].matched=pp.matched||pp.map.size;
