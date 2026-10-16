@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private val metadataIo = Executors.newFixedThreadPool(3)
     private var channels: List<TvChannel> = emptyList()
     private var currentSection = "Início"
+    private var showingMediaDetails = false
     private val favoriteNames = linkedSetOf<String>()
     private val mainHandler = Handler(android.os.Looper.getMainLooper())
     private var clockView: TextView? = null
@@ -122,6 +123,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showSection(section: String) {
+        showingMediaDetails = false
         currentSection = section
         refreshNavigationSelection()
         content.removeAllViews()
@@ -452,6 +454,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showMediaSection(section: String) {
         content.removeAllViews()
+        content.setPadding(d(42), d(20), d(42), d(40))
         val headline = when (section) {
             "Filmes" -> "Qual é o filme de hoje?"
             "Séries" -> "Sua próxima maratona começa aqui"
@@ -586,49 +589,51 @@ class MainActivity : AppCompatActivity() {
                 .replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9]+"), " ").trim()
         }
         fun shelf(title: String, items: List<MediaItem>) {
-            val unique = items.filter { it.title.isNotBlank() }.distinctBy { normalized(it.title) }.take(40)
-            if (unique.isEmpty()) return
-            renderMediaCards(unique, container, title)
+            val unique = items.filter { it.title.isNotBlank() }.distinctBy { normalized(it.title) }.take(36)
+            if (unique.isNotEmpty()) renderMediaCards(unique, container, title)
         }
-
-        // Primeiro vem o catálogo de reprodução CineHUB TV, depois as prateleiras
-        // online com capas e metadados. O conteúdo é limitado por fileira para TV Box.
-        shelf(when (section) {
-            "Filmes" -> "Filmes disponíveis no CineHUB TV"
-            "Séries" -> "Séries disponíveis no CineHUB TV"
-            "Animes" -> "Animes no CineHUB TV"
-            else -> "Doramas no CineHUB TV"
-        }, local)
-        shelf(if (section == "Filmes") "Em cartaz e em destaque" else "Em alta", online)
+        fun hasGenre(item: MediaItem, ids: Set<Int>, names: Set<String>): Boolean =
+            item.genreIds.any { it in ids } || item.genreNames.any { name -> names.any { name.contains(it, true) } }
+        val combined = (local + online).distinctBy { normalized(it.title) }
+        shelf("Do catálogo CineHUB", combined)
+        shelf("Lançamentos e em destaque", online.sortedByDescending { it.year.toIntOrNull() ?: 0 })
         when (section) {
             "Filmes" -> {
-                shelf("Ação e aventura", online.filter { it.genreIds.contains(28) })
-                shelf("Comédia", online.filter { it.genreIds.contains(35) })
-                shelf("Drama", online.filter { it.genreIds.contains(18) })
-                shelf("Animação", online.filter { it.genreIds.contains(16) })
-                shelf("Suspense e mistério", online.filter { it.genreIds.contains(53) || it.genreIds.contains(9648) })
+                shelf("Ação e aventura", combined.filter { hasGenre(it, setOf(28, 12), setOf("ação", "aventura")) })
+                shelf("Comédia para relaxar", combined.filter { hasGenre(it, setOf(35), setOf("comédia", "comedy")) })
+                shelf("Drama e histórias marcantes", combined.filter { hasGenre(it, setOf(18), setOf("drama")) })
+                shelf("Suspense e mistério", combined.filter { hasGenre(it, setOf(53, 9648, 80), setOf("suspense", "mistério", "crime", "thriller")) })
+                shelf("Fantasia e ficção científica", combined.filter { hasGenre(it, setOf(14, 878), setOf("fantasia", "ficção científica", "science fiction")) })
+                shelf("Animações", combined.filter { hasGenre(it, setOf(16), setOf("animação", "animation")) })
             }
             "Séries" -> {
-                shelf("Ação e aventura", online.filter { it.genreIds.contains(10759) })
-                shelf("Drama", online.filter { it.genreIds.contains(18) })
-                shelf("Comédia", online.filter { it.genreIds.contains(35) })
-                shelf("Fantasia e ficção", online.filter { it.genreIds.contains(10765) })
-                shelf("Animações", online.filter { it.genreIds.contains(16) })
+                shelf("Séries para maratonar", online)
+                shelf("Ação e aventura", combined.filter { hasGenre(it, setOf(10759, 28, 12), setOf("ação", "aventura")) })
+                shelf("Drama", combined.filter { hasGenre(it, setOf(18), setOf("drama")) })
+                shelf("Comédia", combined.filter { hasGenre(it, setOf(35), setOf("comédia", "comedy")) })
+                shelf("Fantasia e ficção", combined.filter { hasGenre(it, setOf(10765, 14, 878), setOf("fantasia", "ficção científica")) })
+                shelf("Mistério e investigação", combined.filter { hasGenre(it, setOf(9648, 80), setOf("mistério", "crime", "investigação")) })
+                shelf("Animações", combined.filter { hasGenre(it, setOf(16), setOf("animação", "animation")) })
             }
             "Animes" -> {
-                shelf("Ação e aventura", online.filter { it.genreIds.contains(10759) || it.genreIds.contains(28) })
-                shelf("Fantasia e ficção", online.filter { it.genreIds.contains(10765) })
-                shelf("Animação", online.filter { it.genreIds.contains(16) || it.language == "ja" })
+                shelf("Animes em destaque", combined)
+                shelf("Ação e aventura", combined.filter { hasGenre(it, setOf(10759, 28, 12), setOf("ação", "aventura")) })
+                shelf("Fantasia e mundos novos", combined.filter { hasGenre(it, setOf(10765, 14, 878), setOf("fantasia", "ficção científica")) })
+                shelf("Drama e romance", combined.filter { hasGenre(it, setOf(18, 10749), setOf("drama", "romance")) })
+                shelf("Animação", combined.filter { hasGenre(it, setOf(16), setOf("animação", "animation")) })
             }
             else -> {
-                shelf("Romance e drama", online.filter { it.genreIds.contains(18) || it.genreIds.contains(10749) })
-                shelf("Doramas coreanos", online.filter { it.language == "ko" || it.countries.contains("KR") })
+                shelf("Doramas em destaque", combined)
+                shelf("Romance e drama", combined.filter { hasGenre(it, setOf(18, 10749), setOf("drama", "romance")) })
+                shelf("Suspense e mistério", combined.filter { hasGenre(it, setOf(53, 9648, 80), setOf("suspense", "mistério", "crime")) })
+                shelf("Doramas coreanos", combined.filter { it.language == "ko" || it.countries.contains("KR") })
+                shelf("Comédia", combined.filter { hasGenre(it, setOf(35), setOf("comédia", "comedy")) })
             }
         }
         if (container.childCount == 0) container.addView(label("Nenhum título foi encontrado nesta categoria. Tente atualizar mais tarde.", 14, MUTED, false))
     }
 
-    private fun normalizeMediaTitle(value: String): String =
+private fun normalizeMediaTitle(value: String): String =
         Normalizer.normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "")
             .replace(Regex("\\b(19|20)\\d{2}\\b"), "")
@@ -844,212 +849,244 @@ class MainActivity : AppCompatActivity() {
 
     private fun showRadioStations() {
         content.removeAllViews()
-        content.addView(label("Rádios online", 24, WHITE, true).apply { setPadding(d(2), d(6), 0, d(4)) })
-        content.addView(label("Estações de rádio disponíveis no CineHUB TV", 13, MUTED, false).apply { setPadding(d(2), 0, 0, d(12)) })
-        val status = label("Carregando estações...", 15, MUTED, false).apply { setPadding(d(12), d(14), d(12), d(14)) }
+        content.setPadding(d(42), d(22), d(42), d(36))
+        content.addView(label("RÁDIO", 12, RED, true).apply { setPadding(0, 0, 0, d(5)) })
+        content.addView(label("Encontre a trilha sonora do seu momento", 28, WHITE, true).apply { setPadding(0, 0, 0, d(7)) })
+        content.addView(label("Pesquise pelo nome da estação. A busca considera apenas o catálogo de rádios.", 14, MUTED, false).apply { setPadding(0, 0, 0, d(18)) })
+        val search = EditText(this).apply {
+            hint = "Buscar rádio pelo nome…"; setSingleLine(true); textSize = 16f
+            setTextColor(WHITE); setHintTextColor(MUTED); setPadding(d(18), d(10), d(18), d(10))
+            imeOptions = EditorInfo.IME_ACTION_SEARCH; background = focusBackground(PANEL)
+            isFocusable = true; isFocusableInTouchMode = true
+        }
+        content.addView(search, LinearLayout.LayoutParams(-1, d(54)))
+        val status = label("Carregando estações…", 14, MUTED, false).apply { setPadding(0, d(12), 0, d(10)) }
         content.addView(status)
+        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(results)
+        var loadedStations: List<RadioStation> = emptyList()
+        fun renderStations(query: String) {
+            results.removeAllViews()
+            val filtered = loadedStations.filter { it.name.contains(query.trim(), ignoreCase = true) }.take(160)
+            status.text = when {
+                loadedStations.isEmpty() -> "Carregando estações…"
+                query.isNotBlank() && filtered.isEmpty() -> "Nenhuma rádio encontrada para “" + query + "”."
+                query.isNotBlank() -> filtered.size.toString() + " rádio(s) encontrada(s)"
+                else -> loadedStations.size.toString() + " estações disponíveis · mostrando até 160"
+            }
+            filtered.forEach { station ->
+                val row = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    setPadding(d(14), d(10), d(14), d(10)); background = focusBackground(PANEL)
+                    isFocusable = true; isFocusableInTouchMode = true
+                }
+                val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; station.logoUrl?.let { load(it) { crossfade(true) } } }
+                row.addView(logo, LinearLayout.LayoutParams(d(58), d(58)).apply { marginEnd = d(16) })
+                val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                texts.addView(label(station.name, 17, WHITE, true))
+                texts.addView(label("Rádio online  •  ▶ Reproduzir", 13, MUTED, false).apply { setPadding(0, d(4), 0, 0) })
+                row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+                row.setOnClickListener {
+                    startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                        putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, arrayListOf(station.streamUrl))
+                        putExtra(PlayerActivity.EXTRA_URL, station.streamUrl); putExtra(PlayerActivity.EXTRA_TITLE, station.name)
+                        putExtra("cinehub_radio", true); putExtra(PlayerActivity.EXTRA_MEDIA_TYPE, "radio")
+                    })
+                }
+                results.addView(row, LinearLayout.LayoutParams(-1, d(80)).apply { bottomMargin = d(8) })
+            }
+        }
+        search.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = renderStations(s?.toString().orEmpty())
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
         io.execute {
             val stations = try { SaimoContentRepository.loadRadios(this@MainActivity) } catch (_: Exception) { emptyList() }
             runOnUiThread {
-                if (currentSection != "Rádio") return@runOnUiThread
-                content.removeView(status)
-                if (stations.isEmpty()) {
-                    content.addView(label("Não foi possível carregar as rádios. Verifique a conexão e tente novamente.", 15, MUTED, false))
-                    return@runOnUiThread
-                }
-                content.addView(label("${stations.size} estações disponíveis · mostrando as primeiras 120", 13, RED, true).apply { setPadding(d(2), d(2), 0, d(8)) })
-                // Limit first render on low-memory TV boxes; the remote catalog remains complete.
-                stations.take(120).forEach { station ->
-                    val row = LinearLayout(this).apply {
-                        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                        setPadding(d(12), d(8), d(12), d(8)); background = focusBackground(PANEL)
-                        isFocusable = true; isFocusableInTouchMode = true
-                    }
-                    val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; station.logoUrl?.let { load(it) { crossfade(true) } } }
-                    row.addView(logo, LinearLayout.LayoutParams(d(52), d(52)).apply { marginEnd = d(12) })
-                    val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-                    texts.addView(label(station.name, 16, WHITE, true))
-                    texts.addView(label("Rádio online  •  ▶ Reproduzir", 12, MUTED, false).apply { setPadding(0, d(4), 0, 0) })
-                    row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
-                    row.setOnClickListener {
-                        startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
-                            putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, arrayListOf(station.streamUrl))
-                            putExtra(PlayerActivity.EXTRA_URL, station.streamUrl)
-                            putExtra(PlayerActivity.EXTRA_TITLE, station.name)
-                            putExtra("cinehub_radio", true)
-                            putExtra(PlayerActivity.EXTRA_MEDIA_TYPE, "radio")
-                        })
-                    }
-                    content.addView(row, LinearLayout.LayoutParams(-1, d(68)).apply { bottomMargin = d(5) })
-                }
+                if (currentSection != "Rádio" || showingMediaDetails || isFinishing || isDestroyed) return@runOnUiThread
+                loadedStations = stations
+                if (stations.isEmpty()) status.text = "Não foi possível carregar as rádios. Verifique a conexão e tente novamente."
+                else renderStations(search.text.toString())
             }
         }
     }
+
     private fun showMediaDetails(item: MediaItem) {
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(d(20), d(18), d(20), d(12))
-            gravity = Gravity.TOP
-            setBackgroundColor(0xFF101010.toInt())
+        showingMediaDetails = true
+        content.removeAllViews()
+        content.setPadding(0, 0, 0, d(32))
+        val back = label("←  VOLTAR AO CATÁLOGO", 13, WHITE, true).apply {
+            setPadding(d(42), d(18), d(42), d(12)); isFocusable = true; isFocusableInTouchMode = true
+            background = focusBackground(BG)
+            setOnClickListener { showingMediaDetails = false; showSection(currentSection) }
         }
+        content.addView(back, LinearLayout.LayoutParams(-1, d(58)))
+        val hero = android.widget.FrameLayout(this).apply { setBackgroundColor(0xFF151515.toInt()); clipChildren = true }
+        val backdrop = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            (item.backdrop ?: item.poster)?.let { load(it) { crossfade(true); placeholder(android.graphics.drawable.ColorDrawable(0xFF151515.toInt())) } }
+            contentDescription = "Imagem de fundo de " + item.title
+        }
+        hero.addView(backdrop, android.widget.FrameLayout.LayoutParams(-1, -1))
+        hero.addView(View(this).apply {
+            background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x22000000, 0xCC080808.toInt(), 0xFF080808.toInt()))
+        }, android.widget.FrameLayout.LayoutParams(-1, -1))
+        val heroInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM; setPadding(d(48), d(26), d(48), d(28)) }
+        val typeLabel = when {
+            item.type == "movie" -> "FILME"
+            currentSection == "Animes" || item.language == "ja" -> "ANIME"
+            currentSection == "Doramas" || item.language == "ko" || item.countries.contains("KR") -> "DORAMA"
+            else -> "SÉRIE"
+        }
+        heroInfo.addView(label(typeLabel, 12, RED, true))
+        heroInfo.addView(label(item.title, 32, WHITE, true).apply { setPadding(0, d(6), 0, d(7)); maxLines = 2 })
+        heroInfo.addView(label(item.year.ifBlank { "Ano não informado" } + "   •   ★ " + item.rating + "   •   " + item.genreNames.take(3).joinToString(" / ").ifBlank { "CineHUB" }, 14, WHITE, true))
+        hero.addView(heroInfo, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        content.addView(hero, LinearLayout.LayoutParams(-1, d(330)))
+
+        val body = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP; setPadding(d(48), d(26), d(48), d(8)) }
         val poster = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            item.poster?.let { load(it) { crossfade(true) } }
+            item.poster?.let { load(it) { crossfade(true); placeholder(android.graphics.drawable.ColorDrawable(PANEL)) } }
+            contentDescription = "Capa de " + item.title
         }
-        panel.addView(poster, LinearLayout.LayoutParams(d(176), d(264)).apply { marginEnd = d(20) })
+        body.addView(poster, LinearLayout.LayoutParams(d(190), d(285)).apply { marginEnd = d(28) })
         val info = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        info.addView(label(when {
-            item.type == "movie" -> "FILME"
-            currentSection == "Animes" -> "ANIME"
-            currentSection == "Doramas" -> "DORAMA"
-            else -> "SÉRIE"
-        }, 12, RED, true))
-        info.addView(label(item.title, 25, WHITE, true).apply { setPadding(0, d(6), 0, d(8)) })
-        info.addView(label("${item.year.ifBlank { "Ano não informado" }}   •   ★ ${item.rating}", 14, MUTED, true))
-        info.addView(label(item.description.ifBlank { "Sinopse indisponível para este título." }, 15, WHITE, false).apply {
-            setPadding(0, d(14), 0, d(18))
-        })
+        info.addView(label("SOBRE O CONTEÚDO", 12, RED, true))
+        info.addView(label(item.title, 25, WHITE, true).apply { setPadding(0, d(5), 0, d(10)); maxLines = 2 })
+        info.addView(label(item.year.ifBlank { "Ano não informado" } + "   •   Avaliação ★ " + item.rating, 15, MUTED, true))
+        info.addView(label(item.description.ifBlank { "A sinopse deste título ainda não está disponível no catálogo." }, 16, WHITE, false).apply { setPadding(0, d(14), 0, d(18)); maxLines = 8 })
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val favorite = label(if (isMediaFavorite(item)) "♥ Na Minha Lista" else "♡ Favoritar", 14,
-            if (isMediaFavorite(item)) RED else WHITE, true).apply {
-            setPadding(d(14), d(12), d(14), d(12))
-            background = focusBackground(PANEL)
-            isFocusable = true; isFocusableInTouchMode = true
+        val watch = label("▶  ASSISTIR", 14, WHITE, true).apply {
+            setPadding(d(20), d(14), d(20), d(14)); background = focusBackground(RED); isFocusable = true; isFocusableInTouchMode = true
             setOnClickListener {
-                toggleMediaFavorite(item)
-                text = if (isMediaFavorite(item)) "♥ Na Minha Lista" else "♡ Favoritar"
-                setTextColor(if (isMediaFavorite(item)) RED else WHITE)
-            }
-        }
-        val watch = label("▶  Assistir", 14, WHITE, true).apply {
-            setPadding(d(16), d(12), d(16), d(12))
-            background = focusBackground(RED)
-            isFocusable = true; isFocusableInTouchMode = true
-            setOnClickListener {
-                text = "⏳  Procurando fonte..."
-                isEnabled = false
+                text = "⏳  PROCURANDO FONTE…"; isEnabled = false
                 val resolverSection = when {
                     currentSection == "Animes" || item.language == "ja" -> "Animes"
                     currentSection == "Doramas" || item.language == "ko" || item.countries.contains("KR") -> "Doramas"
                     else -> "Séries"
                 }
                 io.execute {
-                    val resolvedSources = try {
-                        SaimoVodRepository.findDirectPlayback(
-                            this@MainActivity, item.title, item.type == "movie", resolverSection, item.id
-                        )
-                    } catch (_: Exception) { emptyList() }
-                    // ACERVO's validated direct-file/HLS candidates are tried first; the
-                    // established CineHUB resolver remains the fallback source of playback.
+                    val resolvedSources = try { SaimoVodRepository.findDirectPlayback(this@MainActivity, item.title, item.type == "movie", resolverSection, item.id) } catch (_: Exception) { emptyList() }
                     val sources = (item.playbackSources + resolvedSources).distinct()
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
-                        isEnabled = true
-                        text = "▶  Assistir"
-                        if (sources.isNotEmpty()) {
-                            launchMediaPlayback(item, sources)
-                        } else {
-                            androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
-                                .setTitle("Fonte não encontrada")
-                                .setMessage("Não encontramos uma URL direta compatível com o player nativo para este título. Vamos ampliar o resolvedor de fontes na próxima etapa.")
-                                .setPositiveButton("Entendi", null).show()
-                        }
+                        isEnabled = true; text = "▶  ASSISTIR"
+                        if (sources.isNotEmpty()) launchMediaPlayback(item, sources)
+                        else androidx.appcompat.app.AlertDialog.Builder(this@MainActivity).setTitle("Fonte não encontrada")
+                            .setMessage("Ainda não encontramos uma fonte direta compatível com o player para este título.")
+                            .setPositiveButton("Entendi", null).show()
                     }
                 }
             }
         }
-        actions.addView(watch)
-        actions.addView(favorite, LinearLayout.LayoutParams(-2, -2).apply { marginStart = d(10) })
-        info.addView(actions)
-
-        // Séries, animes e doramas usam os episódios disponíveis no catálogo conectado.
-        // A lista é carregada em segundo plano e só os episódios disponíveis são exibidos.
-        if (item.type != "movie") {
-            val episodeArea = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                visibility = View.GONE
-                setPadding(0, d(14), 0, 0)
+        val favorite = label(if (isMediaFavorite(item)) "♥  NA MINHA LISTA" else "♡  MINHA LISTA", 14, if (isMediaFavorite(item)) RED else WHITE, true).apply {
+            setPadding(d(18), d(14), d(18), d(14)); background = focusBackground(PANEL); isFocusable = true; isFocusableInTouchMode = true
+            setOnClickListener {
+                toggleMediaFavorite(item)
+                text = if (isMediaFavorite(item)) "♥  NA MINHA LISTA" else "♡  MINHA LISTA"
+                setTextColor(if (isMediaFavorite(item)) RED else WHITE)
             }
-            info.addView(episodeArea, LinearLayout.LayoutParams(-1, -2))
+        }
+        actions.addView(watch); actions.addView(favorite, LinearLayout.LayoutParams(-2, -2).apply { marginStart = d(12) })
+        info.addView(actions); body.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
+        content.addView(body, LinearLayout.LayoutParams(-1, -2))
+
+        val castSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(48), d(20), d(48), d(20)) }
+        castSection.addView(label("ELENCO", 21, WHITE, true).apply { setPadding(0, 0, 0, d(10)) })
+        castSection.addView(label("Carregando elenco…", 13, MUTED, false))
+        content.addView(castSection, LinearLayout.LayoutParams(-1, -2))
+        io.execute {
+            val cast = runCatching { OnlineCatalogRepository.fetchCast(item) }.getOrDefault(emptyList())
+            runOnUiThread {
+                if (!showingMediaDetails || isFinishing || isDestroyed) return@runOnUiThread
+                castSection.removeAllViews()
+                castSection.addView(label("ELENCO", 21, WHITE, true).apply { setPadding(0, 0, 0, d(10)) })
+                if (cast.isEmpty()) castSection.addView(label("As informações de elenco não estão disponíveis para este título.", 14, MUTED, false))
+                else {
+                    val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+                    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                    cast.forEach { person ->
+                        val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = focusBackground(PANEL); setPadding(d(8), d(8), d(8), d(10)) }
+                        val photo = ImageView(this@MainActivity).apply {
+                            scaleType = ImageView.ScaleType.CENTER_CROP
+                            person.photoUrl?.let { load(it) { crossfade(true); placeholder(android.graphics.drawable.ColorDrawable(PANEL)) } }
+                        }
+                        card.addView(photo, LinearLayout.LayoutParams(d(112), d(140)))
+                        card.addView(label(person.name, 13, WHITE, true).apply { maxLines = 2; setPadding(d(2), d(7), d(2), d(2)) })
+                        if (person.character.isNotBlank()) card.addView(label(person.character, 11, MUTED, false).apply { maxLines = 2; setPadding(d(2), d(2), d(2), 0) })
+                        row.addView(card, LinearLayout.LayoutParams(d(132), -2).apply { marginEnd = d(10) })
+                    }
+                    scroll.addView(row); castSection.addView(scroll, LinearLayout.LayoutParams(-1, -2))
+                }
+            }
+        }
+        if (item.type != "movie") {
+            val episodeSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(d(48), d(18), d(48), d(32)) }
+            episodeSection.addView(label("TEMPORADAS E EPISÓDIOS", 21, WHITE, true).apply { setPadding(0, 0, 0, d(10)) })
+            episodeSection.addView(label("Carregando episódios disponíveis…", 13, MUTED, false))
+            content.addView(episodeSection, LinearLayout.LayoutParams(-1, -2))
             val resolverSection = when {
                 currentSection == "Animes" || item.language == "ja" -> "Animes"
                 currentSection == "Doramas" || item.language == "ko" || item.countries.contains("KR") -> "Doramas"
                 else -> "Séries"
             }
             io.execute {
-                val episodes = try {
-                    SaimoVodRepository.findEpisodes(this@MainActivity, item.title, resolverSection, item.id)
-                } catch (_: Exception) { emptyList() }
+                val episodes = try { SaimoVodRepository.findEpisodes(this@MainActivity, item.title, resolverSection, item.id) } catch (_: Exception) { emptyList() }
                 runOnUiThread {
-                    if (isFinishing || isDestroyed || episodes.isEmpty()) return@runOnUiThread
-                    episodeArea.visibility = View.VISIBLE
-                    episodeArea.addView(label("EPISÓDIOS DISPONÍVEIS", 12, RED, true).apply {
-                        setPadding(0, 0, 0, d(8))
-                    })
-                    val episodeScroll = android.widget.HorizontalScrollView(this).apply {
-                        isHorizontalScrollBarEnabled = false
-                        descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+                    if (!showingMediaDetails || isFinishing || isDestroyed) return@runOnUiThread
+                    episodeSection.removeAllViews()
+                    episodeSection.addView(label("TEMPORADAS E EPISÓDIOS", 21, WHITE, true).apply { setPadding(0, 0, 0, d(10)) })
+                    if (episodes.isEmpty()) {
+                        episodeSection.addView(label("Ainda não há episódios indexados para este título.", 14, MUTED, false)); return@runOnUiThread
                     }
-                    val episodeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-                    episodes.take(60).forEach { episode ->
-                        val episodeButton = label(episode.label, 12, WHITE, true).apply {
-                            setPadding(d(12), d(10), d(12), d(10))
-                            background = focusBackground(PANEL)
-                            isFocusable = true
-                            isFocusableInTouchMode = true
-                            contentDescription = "Assistir ${item.title}, temporada ${episode.season}, episódio ${episode.number}"
+                    val seasons = episodes.groupBy { it.season }.toSortedMap()
+                    val seasonPicker = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+                    val seasonButtons = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                    val episodeList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                    fun renderSeason(season: Int) {
+                        episodeList.removeAllViews()
+                        seasons[season].orEmpty().sortedBy { it.number }.forEach { episode ->
+                            val row = LinearLayout(this).apply {
+                                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                                background = focusBackground(PANEL); setPadding(d(14), d(12), d(14), d(12))
+                                isFocusable = true; isFocusableInTouchMode = true
+                            }
+                            row.addView(label("▶", 17, RED, true).apply { setPadding(0, 0, d(12), 0) })
+                            val textBlock = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                            textBlock.addView(label("Temporada " + season + "  •  Episódio " + episode.number, 15, WHITE, true))
+                            textBlock.addView(label(if (episode.language.equals("leg", true)) "Legendado" else "Dublado", 12, MUTED, false).apply { setPadding(0, d(3), 0, 0) })
+                            row.addView(textBlock, LinearLayout.LayoutParams(0, -2, 1f)); row.addView(label("ASSISTIR", 12, RED, true))
+                            row.setOnClickListener {
+                                if (episode.sources.isNotEmpty()) launchMediaPlayback(item, episode.sources,
+                                    item.title + " • T" + season + " E" + episode.number,
+                                    item.id + "::" + season + ":" + episode.number + ":" + episode.language)
+                            }
+                            episodeList.addView(row, LinearLayout.LayoutParams(-1, d(68)).apply { bottomMargin = d(7) })
+                        }
+                    }
+                    seasons.keys.forEachIndexed { index, season ->
+                        val button = label("Temporada " + season, 13, WHITE, true).apply {
+                            setPadding(d(14), d(10), d(14), d(10)); background = focusBackground(if (index == 0) RED else PANEL)
+                            isFocusable = true; isFocusableInTouchMode = true
                             setOnClickListener {
-                                if (episode.sources.isEmpty()) return@setOnClickListener
-                                launchMediaPlayback(
-                                    item, episode.sources, "${item.title} • ${episode.label}",
-                                    "${item.id}::${episode.season}:${episode.number}:${episode.language}"
-                                )
+                                for (i in 0 until seasonButtons.childCount) seasonButtons.getChildAt(i).background = focusBackground(PANEL)
+                                background = focusBackground(RED); renderSeason(season)
                             }
                         }
-                        episodeRow.addView(episodeButton, LinearLayout.LayoutParams(-2, -2).apply {
-                            marginEnd = d(8)
-                        })
+                        seasonButtons.addView(button, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = d(8) })
                     }
-                    episodeScroll.addView(episodeRow)
-                    episodeArea.addView(episodeScroll, LinearLayout.LayoutParams(-1, -2))
+                    seasonPicker.addView(seasonButtons)
+                    episodeSection.addView(seasonPicker, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = d(12) })
+                    episodeSection.addView(episodeList); renderSeason(seasons.keys.first())
                 }
             }
         }
-        panel.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
-        val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
-            .setView(panel)
-            .setNegativeButton("←  Voltar", null)
-            .create()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.setOnShowListener {
-            dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.9f).toInt(), -2)
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE)?.apply {
-                setTextColor(WHITE)
-                textSize = 14f
-                typeface = Typeface.DEFAULT_BOLD
-                isFocusable = true
-                isFocusableInTouchMode = true
-                setPadding(d(18), d(12), d(18), d(12))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = d(10).toFloat()
-                    setColor(PANEL)
-                    setStroke(d(1), RED)
-                }
-                setOnFocusChangeListener { view, focused ->
-                    view.background = android.graphics.drawable.GradientDrawable().apply {
-                        cornerRadius = d(10).toFloat()
-                        setColor(if (focused) 0xFF4A1118.toInt() else PANEL)
-                        setStroke(d(if (focused) 2 else 1), if (focused) 0xFFFF5A64.toInt() else RED)
-                    }
-                }
-            }
-        }
-        dialog.show()
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.9f).toInt(), -2)
     }
 
-    private fun showMyList() {
+private fun showMyList() {
         content.removeAllViews()
         content.addView(label("Minha lista", 28, WHITE, true).apply { setPadding(d(0), d(12), d(0), d(8)) })
         content.addView(label("Filmes, séries, animes, doramas e canais que você salvou.", 14, MUTED, false).apply {
@@ -1606,6 +1643,11 @@ class MainActivity : AppCompatActivity() {
         }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BACK && showingMediaDetails) {
+            showingMediaDetails = false
+            showSection(currentSection)
+            return true
+        }
         if (keyCode == KeyEvent.KEYCODE_BACK && currentSection != "Início") {
             showSection("Início")
             return true
