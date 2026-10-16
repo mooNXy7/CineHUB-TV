@@ -153,52 +153,56 @@ class MainActivity : AppCompatActivity() {
     private fun showHomeLanding() {
         mainHandler.removeCallbacks(homeHeroTick)
         content.removeAllViews()
+        content.setPadding(d(0), d(0), d(0), d(28))
 
-        val hero = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF351016.toInt(), 0xFF111111.toInt())
-            ).apply { cornerRadius = d(14).toFloat(); setStroke(d(1), 0xFF4A252A.toInt()) }
-            clipToOutline = true
+        // Full-width cinematic hero: no floating poster card. The backdrop fills the
+        // hero and a dark bottom gradient keeps title and metadata readable.
+        val hero = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF171717.toInt())
+            clipChildren = true
+            clipToPadding = true
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        val posterFrame = android.widget.FrameLayout(this).apply { setBackgroundColor(0xFF202020.toInt()) }
         homeHeroPoster = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            contentDescription = "Capa do lançamento em destaque"
+            contentDescription = "Imagem de destaque CineHUB TV"
         }
-        posterFrame.addView(homeHeroPoster, android.widget.FrameLayout.LayoutParams(-1, -1))
-        hero.addView(posterFrame, LinearLayout.LayoutParams(d(154), d(178)))
-
+        hero.addView(homeHeroPoster, android.widget.FrameLayout.LayoutParams(-1, -1))
+        val shade = View(this).apply {
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x10000000, 0x33000000, 0xF5080808.toInt())
+            )
+        }
+        hero.addView(shade, android.widget.FrameLayout.LayoutParams(-1, -1))
         val info = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(d(20), d(10), d(18), d(10))
+            gravity = Gravity.BOTTOM
+            setPadding(d(42), d(24), d(42), d(30))
+            isFocusable = false
         }
-        info.addView(label("CINEHUB TV  •  LANÇAMENTOS", 11, RED, true))
-        homeHeroTitle = label("Lançamentos e tendências", 23, WHITE, true).apply {
-            setPadding(0, d(6), 0, d(4)); maxLines = 2
+        info.addView(label("DESTAQUE", 12, RED, true))
+        homeHeroTitle = label("Descubra sua próxima história", 30, WHITE, true).apply {
+            setPadding(0, d(5), 0, d(5)); maxLines = 2
         }
         info.addView(homeHeroTitle!!)
-        homeHeroMeta = label("FILMES  •  SÉRIES  •  NOVIDADES", 12, MUTED, true)
+        homeHeroMeta = label("FILMES  •  SÉRIES  •  NOVIDADES", 13, WHITE, true)
         info.addView(homeHeroMeta!!)
-        homeHeroDescription = label("Capas, sinopses e informações atualizadas do catálogo online.", 13, WHITE, false).apply {
-            setPadding(0, d(7), 0, 0); maxLines = 3
+        homeHeroDescription = label("Grandes histórias para assistir hoje.", 15, WHITE, false).apply {
+            setPadding(0, d(8), 0, 0); maxLines = 3
         }
         info.addView(homeHeroDescription!!)
-        hero.addView(info, LinearLayout.LayoutParams(0, -1, 1f))
+        hero.addView(info, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         hero.setOnClickListener { homeHeroItems.getOrNull(homeHeroIndex)?.let { showMediaDetails(it) } }
-        content.addView(hero, LinearLayout.LayoutParams(-1, d(178)))
+        content.addView(hero, LinearLayout.LayoutParams(-1, d(340)))
 
         val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
         showContinueWatching()
         val recentChannelName = prefs.getString("continue_channel_name", null)
         if (!recentChannelName.isNullOrBlank()) {
             content.addView(label("Continuar assistindo", 20, WHITE, true).apply {
-                setPadding(d(2), d(14), 0, d(7))
+                setPadding(d(42), d(14), 0, d(7))
             })
             val recent = label("▶   $recentChannelName     •     Retomar canal", 15, WHITE, true).apply {
                 setPadding(d(16), d(12), d(16), d(12))
@@ -218,70 +222,125 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            content.addView(recent, LinearLayout.LayoutParams(-1, d(56)))
+            content.addView(recent, LinearLayout.LayoutParams(-1, d(56)).apply {
+                setMargins(d(42), 0, d(42), 0)
+            })
         }
 
-        content.addView(label("Explore o CineHUB", 21, WHITE, true).apply {
-            setPadding(d(2), d(16), 0, d(7))
-        })
-        val grid = android.widget.GridLayout(this).apply {
-            columnCount = 3
-            rowCount = 2
-            alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS
-        }
-        listOf("Filmes", "Séries", "Doramas", "Animes", "Rádio", "Ao vivo").forEachIndexed { index, name ->
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(d(15), d(9), d(12), d(9))
-                background = focusBackground(PANEL)
-                isFocusable = true
-                isFocusableInTouchMode = true
-                addView(label("CINEHUB", 10, RED, true))
-                addView(label(name, 18, WHITE, true).apply { setPadding(0, d(4), 0, d(2)) })
-                addView(label(
-                    if (name == "Ao vivo") "Canais e programação"
-                    else if (name == "Rádio") "Estações online"
-                    else "Ver catálogo online", 12, MUTED, false
-                ))
-                setOnClickListener { showSection(name) }
-            }
-            val lp = android.widget.GridLayout.LayoutParams().apply {
-                width = 0
-                height = d(88)
-                columnSpec = android.widget.GridLayout.spec(index % 3, 1f)
-                rowSpec = android.widget.GridLayout.spec(index / 3)
-                setMargins(d(4), d(4), d(4), d(4))
-            }
-            grid.addView(card, lp)
-        }
-        content.addView(grid, LinearLayout.LayoutParams(-1, d(200)))
+        // The home now prioritizes content rows instead of large category shortcut tiles.
+        val movieRow = createHomeMediaRow("Filmes em Alta")
+        val seriesRow = createHomeMediaRow("Séries para Maratonar")
+        val channelRow = createHomeChannelRow("Canais para Você")
+        val doramaRow = createHomeMediaRow("Doramas")
+        val animeRow = createHomeMediaRow("Animes")
 
         io.execute {
             try {
-                val items = (OnlineCatalogRepository.previewFeed("Filmes") +
+                val movies = OnlineCatalogRepository.previewFeed("Filmes")
+                    .filter { !it.poster.isNullOrBlank() }.distinctBy { it.id }.take(18)
+                val series = OnlineCatalogRepository.previewFeed("Séries")
+                    .filter { !it.poster.isNullOrBlank() }.distinctBy { it.id }.take(18)
+                val doramas = (OnlineCatalogRepository.previewFeed("Doramas") +
                     OnlineCatalogRepository.previewFeed("Séries"))
-                    .filter { !it.poster.isNullOrBlank() }
-                    .distinctBy { it.id }
-                    .take(12)
+                    .filter { !it.poster.isNullOrBlank() &&
+                        (it.title.contains("dorama", true) || it.language.contains("ko", true) ||
+                         it.countries.any { country -> country.contains("Korea", true) }) }
+                    .distinctBy { it.id }.take(18)
+                val animes = OnlineCatalogRepository.previewFeed("Animes")
+                    .filter { !it.poster.isNullOrBlank() }.distinctBy { it.id }.take(18)
+                val heroItems = (movies + series).distinctBy { it.id }.take(12)
                 runOnUiThread {
-                    if (currentSection != "Início" || items.isEmpty()) return@runOnUiThread
-                    homeHeroItems = items
+                    if (currentSection != "Início") return@runOnUiThread
+                    homeHeroItems = heroItems
                     homeHeroIndex = 0
-                    bindHomeHero(items[0])
+                    heroItems.firstOrNull()?.let { bindHomeHero(it) }
                     mainHandler.removeCallbacks(homeHeroTick)
-                    mainHandler.postDelayed(homeHeroTick, 8_000L)
+                    if (heroItems.size > 1) mainHandler.postDelayed(homeHeroTick, 8_000L)
+                    renderMediaCards(movies, movieRow, "Filmes em Alta") { showMediaDetails(it) }
+                    renderMediaCards(series, seriesRow, "Séries para Maratonar") { showMediaDetails(it) }
+                    renderMediaCards(doramas, doramaRow, "Doramas") { showMediaDetails(it) }
+                    renderMediaCards(animes, animeRow, "Animes") { showMediaDetails(it) }
+                    populateHomeChannelRow(channelRow)
                 }
             } catch (_: Exception) {
                 runOnUiThread {
                     if (currentSection == "Início") {
-                        homeHeroTitle?.text = "Seu próximo universo começa aqui"
-                        homeHeroMeta?.text = "FILMES  •  SÉRIES  •  NOVIDADES"
-                        homeHeroDescription?.text = "O catálogo online não respondeu. Tente novamente mais tarde."
+                        homeHeroTitle?.text = "Sua próxima história começa aqui"
+                        homeHeroMeta?.text = "CINEHUB TV"
+                        homeHeroDescription?.text = "Não foi possível atualizar o catálogo agora."
+                        populateHomeChannelRow(channelRow)
                     }
                 }
             }
         }
+        populateHomeChannelRow(channelRow)
+    }
+
+    private fun createHomeMediaRow(title: String): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(42), d(8), d(42), d(4))
+        }
+        row.addView(label(title, 20, WHITE, true).apply {
+            setPadding(0, d(8), 0, d(8))
+        })
+        row.addView(label("Carregando catálogo…", 13, MUTED, false).apply {
+            setPadding(0, d(4), 0, d(12))
+        })
+        content.addView(row, LinearLayout.LayoutParams(-1, -2))
+        return row
+    }
+
+    private fun createHomeChannelRow(title: String): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(d(42), d(8), d(42), d(4))
+        }
+        row.addView(label(title, 20, WHITE, true).apply {
+            setPadding(0, d(8), 0, d(8))
+        })
+        row.addView(label("Canais disponíveis", 13, MUTED, false).apply {
+            setPadding(0, d(4), 0, d(12))
+        })
+        content.addView(row, LinearLayout.LayoutParams(-1, -2))
+        return row
+    }
+
+    private fun populateHomeChannelRow(container: LinearLayout) {
+        if (currentSection != "Início" || container.parent == null) return
+        if (container.childCount > 1) container.removeViewAt(1)
+        val allChannels = (channels + readSavedFavoriteChannels()).distinctBy { it.name }.take(16)
+        if (allChannels.isEmpty()) {
+            container.addView(label("Seus canais aparecerão aqui quando a lista terminar de carregar.", 13, MUTED, false)
+                .apply { setPadding(0, d(4), 0, d(12)) })
+            return
+        }
+        val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }
+        val cards = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        allChannels.forEach { channel ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(d(14), d(12), d(14), d(12))
+                background = focusBackground(PANEL)
+                isFocusable = true
+                isFocusableInTouchMode = true
+                addView(label("▶", 22, RED, true))
+                addView(label(channel.name, 14, WHITE, true).apply { maxLines = 2; gravity = Gravity.CENTER })
+                setOnClickListener {
+                    if (channel.sources.isNotEmpty()) startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                        putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(channel.sources))
+                        putExtra(PlayerActivity.EXTRA_URL, channel.primarySource)
+                        putExtra(PlayerActivity.EXTRA_TITLE, channel.name)
+                    }) else showInfo("Canal indisponível", "Não há uma fonte de reprodução carregada para este canal.")
+                }
+            }
+            cards.addView(card, LinearLayout.LayoutParams(d(190), d(92)).apply {
+                setMargins(0, 0, d(12), d(8))
+            })
+        }
+        scroll.addView(cards)
+        container.addView(scroll, LinearLayout.LayoutParams(-1, -2))
     }
 
     private var homeHeroPoster: ImageView? = null
