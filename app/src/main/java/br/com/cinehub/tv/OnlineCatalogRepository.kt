@@ -21,8 +21,11 @@ data class MediaItem(
     val genreIds: Set<Int>,
     val language: String,
     val countries: Set<String>,
-    val playbackSources: List<String> = emptyList()
+    val playbackSources: List<String> = emptyList(),
+    val genreNames: Set<String> = emptySet()
 )
+
+data class CastMember(val name: String, val character: String, val photoUrl: String?)
 
 object OnlineCatalogRepository {
     private const val FUNCTION_URL = "https://qdheeiitzlvynshvkwcs.supabase.co/functions/v1/cinehub-catalog"
@@ -32,6 +35,10 @@ object OnlineCatalogRepository {
     private const val CACHE_TTL_MS = 6L * 60L * 60L * 1000L
     private data class CachedCatalog(val items: List<MediaItem>, val loadedAt: Long)
     private val acervoCache = ConcurrentHashMap<String, CachedCatalog>()
+    private val castCache = ConcurrentHashMap<String, List<CastMember>>()
+    private const val TMDB_KEY = "15d2ea6d0dc1d476efbca3eba2b9bbfb"
+    private const val TMDB_BASE = "https://api.themoviedb.org/3"
+    private const val TMDB_IMAGES = "https://image.tmdb.org/t/p/w185/"
 
     /**
      * ACERVO is the primary catalog for the four VOD sections. It includes all indexed
@@ -91,11 +98,14 @@ object OnlineCatalogRepository {
             val year = item.optString("year").takeIf { it.isNotBlank() && it != "null" }.orEmpty()
             val genresArray = item.optJSONArray("genres")
             val genreIds = mutableSetOf<Int>()
+            val genreNames = mutableSetOf<String>()
             if (genresArray != null) {
                 for (g in 0 until genresArray.length()) {
                     // Preserve the existing MediaItem shape; these IDs are only used for
                     // broad legacy filters. ACERVO category membership is authoritative.
-                    val genre = genresArray.optString(g).lowercase(Locale.ROOT)
+                    val genreName = genresArray.optString(g).trim()
+                    if (genreName.isNotBlank()) genreNames.add(genreName)
+                    val genre = genreName.lowercase(Locale.ROOT)
                     if (genre.contains("anima")) genreIds.add(16)
                 }
             }
@@ -130,7 +140,8 @@ object OnlineCatalogRepository {
                 genreIds = genreIds,
                 language = when (category) { "anime" -> "ja"; "doramas" -> "ko"; else -> "" },
                 countries = if (category == "doramas") setOf("KR") else emptySet(),
-                playbackSources = playbackSources.distinct()
+                playbackSources = playbackSources.distinct(),
+                genreNames = genreNames
             ))
         }
         val stable = items.distinctBy { it.id }
@@ -249,7 +260,8 @@ object OnlineCatalogRepository {
             description = raw.optString("overview"),
             genreIds = genres,
             language = raw.optString("original_language"),
-            countries = countries
+            countries = countries,
+            genreNames = emptySet()
         )
     }
 
@@ -264,4 +276,39 @@ object OnlineCatalogRepository {
         .replace(Regex("""[^a-z0-9]+"""), " ")
         .trim()
         .replace(Regex("""\s+"""), " ")
+    /** Fetch credits only when a title details page is opened. */
+    fun fetchCast(item: MediaItem): List<CastMember> {
+        castCache[item.id]?.let { return it }
+        val type = if (item.type == "movie") "movie" else "tv"
+        fun getJson(url: String): JSONObject? = runCatching {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 7000; readTimeout = 9000
+                setRequestProperty("Accept", "application/json")
+            }
+            try {
+                if (connection.responseCode !in 200..299) return@runCatching null
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()) }
+            } finally { connection.disconnect() }
+        }.getOrNull()
+        var tmdbId = Regex("(?:movie|tv)-(\\d+)$").find(item.id)?.groupValues?.getOrNull(1)
+        if (tmdbId == null && item.id.startsWith("acervo-")) tmdbId = item.id.removePrefix("acervo-").toLongOrNull()?.toString()
+        if (tmdbId == null) {
+            val query = java.net.URLEncoder.encode(item.title, "UTF-8")
+            tmdbId = getJson("$TMDB_BASE/search/$type?api_key=$TMDB_KEY&language=pt-BR&query=$query")
+                ?.optJSONArray("results")?.optJSONObject(0)?.optString("id")?.takeIf { it.isNotBlank() && it != "0" }
+        }
+        val id = tmdbId ?: return emptyList()
+        val details = getJson("$TMDB_BASE/$type/$id?api_key=$TMDB_KEY&language=pt-BR&append_to_response=credits")
+        val array = details?.optJSONObject("credits")?.optJSONArray("cast") ?: return emptyList()
+        val cast = (0 until minOf(array.length(), 20)).mapNotNull { index ->
+            val person = array.optJSONObject(index) ?: return@mapNotNull null
+            val name = person.optString("name").trim()
+            if (name.isBlank()) return@mapNotNull null
+            CastMember(name, person.optString("character").takeIf { it.isNotBlank() && it != "null" }.orEmpty(),
+                person.optString("profile_path").takeIf { it.isNotBlank() && it != "null" }?.let { TMDB_IMAGES + it })
+        }
+        castCache[item.id] = cast
+        return cast
+    }
+
 }
