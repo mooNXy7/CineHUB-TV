@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private val favoriteNames = linkedSetOf<String>()
     private val mainHandler = Handler(android.os.Looper.getMainLooper())
     private var clockView: TextView? = null
+    private var otaUpdateManager: OtaUpdateManager? = null
     private val clockTick = object : Runnable { override fun run() { clockView?.text = SimpleDateFormat("HH:mm", Locale("pt", "BR")).apply { timeZone = TimeZone.getTimeZone("America/Sao_Paulo") }.format(Date()); mainHandler.postDelayed(this, 30_000L) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,7 +58,9 @@ class MainActivity : AppCompatActivity() {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         favoriteNames.addAll(getSharedPreferences("cinehub-tv", MODE_PRIVATE).getStringSet("favorite_channels", emptySet()).orEmpty())
+        otaUpdateManager = OtaUpdateManager(this)
         buildHome()
+        mainHandler.postDelayed({ otaUpdateManager?.checkForUpdate() }, 2500L)
     }
 
     private fun buildHome() {
@@ -256,8 +259,8 @@ class MainActivity : AppCompatActivity() {
 
         io.execute {
             try {
-                val items = (OnlineCatalogRepository.feed("Filmes") +
-                    OnlineCatalogRepository.feed("Séries"))
+                val items = (OnlineCatalogRepository.previewFeed("Filmes") +
+                    OnlineCatalogRepository.previewFeed("Séries"))
                     .filter { !it.poster.isNullOrBlank() }
                     .distinctBy { it.id }
                     .take(12)
@@ -386,7 +389,7 @@ class MainActivity : AppCompatActivity() {
         }
         content.addView(label(section.uppercase(), 12, RED, true).apply { setPadding(d(0), d(8), d(0), d(4)) })
         content.addView(label(headline, 28, WHITE, true).apply { setPadding(d(0), d(0), d(0), d(8)) })
-        content.addView(label("Catálogo do Saimo + capas e informações online, organizados em prateleiras.", 14, MUTED, false)
+        content.addView(label("Catálogo CineHUB TV com capas e informações online, organizados em prateleiras.", 14, MUTED, false)
             .apply { setPadding(d(0), d(0), d(0), d(14)) })
 
         val searchLine = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -436,7 +439,7 @@ class MainActivity : AppCompatActivity() {
                         return@execute
                     }
 
-                    // Renderiza as capas online imediatamente; o índice local do Saimo
+                    // Renderiza as capas online imediatamente; o índice complementar
                     // é carregado em uma segunda tarefa para não segurar a interface.
                     runOnUiThread {
                         if (currentSection != section) return@runOnUiThread
@@ -444,7 +447,7 @@ class MainActivity : AppCompatActivity() {
                         results.removeAllViews()
                         results.visibility = View.GONE
                         shelves.visibility = View.VISIBLE
-                        status.text = "Carregando títulos do acervo Saimo em segundo plano…"
+                        status.text = "Carregando títulos do catálogo CineHUB TV em segundo plano…"
                         renderMediaShelves(section, online, emptyList(), shelves)
                     }
                     catalogIo.execute {
@@ -468,7 +471,7 @@ class MainActivity : AppCompatActivity() {
                         }.distinctBy { normalized(it.title) }
                         runOnUiThread {
                             if (currentSection != section || search.text.toString().isNotBlank() || isFinishing || isDestroyed) return@runOnUiThread
-                            status.text = "${localItems.size} títulos no índice Saimo · ${online.size} títulos com capas e metadados online"
+                            status.text = "${localItems.size} títulos no catálogo CineHUB TV · ${online.size} títulos com capas e metadados online"
                             renderMediaShelves(section, online, localItems, shelves)
                             enrichCatalogMetadata(section, localItems, online, shelves, search)
                         }
@@ -490,7 +493,7 @@ class MainActivity : AppCompatActivity() {
                             runOnUiThread {
                                 if (currentSection == section && search.text.toString().isBlank()) {
                                     renderMediaShelves(section, emptyList(), localItems, shelves)
-                                    status.text = "${localItems.size} títulos do acervo Saimo carregados"
+                                    status.text = "${localItems.size} títulos do catálogo CineHUB TV carregados"
                                 }
                             }
                         }
@@ -517,13 +520,13 @@ class MainActivity : AppCompatActivity() {
             renderMediaCards(unique, container, title)
         }
 
-        // Primeiro vem o catálogo de reprodução do Saimo, depois as prateleiras
+        // Primeiro vem o catálogo de reprodução CineHUB TV, depois as prateleiras
         // online com capas e metadados. O conteúdo é limitado por fileira para TV Box.
         shelf(when (section) {
-            "Filmes" -> "Filmes disponíveis no acervo Saimo"
-            "Séries" -> "Séries disponíveis no acervo Saimo"
-            "Animes" -> "Animes do acervo Saimo"
-            else -> "Doramas do acervo Saimo"
+            "Filmes" -> "Filmes disponíveis no CineHUB TV"
+            "Séries" -> "Séries disponíveis no CineHUB TV"
+            "Animes" -> "Animes no CineHUB TV"
+            else -> "Doramas no CineHUB TV"
         }, local)
         shelf(if (section == "Filmes") "Em cartaz e em destaque" else "Em alta", online)
         when (section) {
@@ -657,7 +660,7 @@ class MainActivity : AppCompatActivity() {
                                 maxLines = 4
                                 setPadding(0, d(10), 0, d(4))
                             })
-                            addView(label("ACERVO SAIMO", 9, MUTED, true).apply {
+                            addView(label("CINEHUB TV", 9, MUTED, true).apply {
                                 gravity = Gravity.CENTER
                                 setPadding(0, d(6), 0, 0)
                             })
@@ -771,7 +774,7 @@ class MainActivity : AppCompatActivity() {
     private fun showRadioStations() {
         content.removeAllViews()
         content.addView(label("Rádios online", 24, WHITE, true).apply { setPadding(d(2), d(6), 0, d(4)) })
-        content.addView(label("Estações carregadas do catálogo público do Saimo TV", 13, MUTED, false).apply { setPadding(d(2), 0, 0, d(12)) })
+        content.addView(label("Estações de rádio disponíveis no CineHUB TV", 13, MUTED, false).apply { setPadding(d(2), 0, 0, d(12)) })
         val status = label("Carregando estações...", 15, MUTED, false).apply { setPadding(d(12), d(14), d(12), d(14)) }
         content.addView(status)
         io.execute {
@@ -858,11 +861,14 @@ class MainActivity : AppCompatActivity() {
                     else -> "Séries"
                 }
                 io.execute {
-                    val sources = try {
+                    val resolvedSources = try {
                         SaimoVodRepository.findDirectPlayback(
                             this@MainActivity, item.title, item.type == "movie", resolverSection, item.id
                         )
                     } catch (_: Exception) { emptyList() }
+                    // ACERVO's validated direct-file/HLS candidates are tried first; the
+                    // established CineHUB resolver remains the fallback source of playback.
+                    val sources = (item.playbackSources + resolvedSources).distinct()
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         isEnabled = true
@@ -883,7 +889,7 @@ class MainActivity : AppCompatActivity() {
         actions.addView(favorite, LinearLayout.LayoutParams(-2, -2).apply { marginStart = d(10) })
         info.addView(actions)
 
-        // Séries, animes e doramas usam os episódios publicados no acervo Saimo.
+        // Séries, animes e doramas usam os episódios disponíveis no catálogo conectado.
         // A lista é carregada em segundo plano e só os episódios disponíveis são exibidos.
         if (item.type != "movie") {
             val episodeArea = LinearLayout(this).apply {
@@ -939,11 +945,31 @@ class MainActivity : AppCompatActivity() {
         panel.addView(info, LinearLayout.LayoutParams(0, -2, 1f))
         val dialog = androidx.appcompat.app.AlertDialog.Builder(this)
             .setView(panel)
-            .setNegativeButton("Fechar", null)
+            .setNegativeButton("←  Voltar", null)
             .create()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.setOnShowListener {
             dialog.window?.setLayout((resources.displayMetrics.widthPixels * 0.9f).toInt(), -2)
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE)?.apply {
+                setTextColor(WHITE)
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                isFocusable = true
+                isFocusableInTouchMode = true
+                setPadding(d(18), d(12), d(18), d(12))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = d(10).toFloat()
+                    setColor(PANEL)
+                    setStroke(d(1), RED)
+                }
+                setOnFocusChangeListener { view, focused ->
+                    view.background = android.graphics.drawable.GradientDrawable().apply {
+                        cornerRadius = d(10).toFloat()
+                        setColor(if (focused) 0xFF4A1118.toInt() else PANEL)
+                        setStroke(d(if (focused) 2 else 1), if (focused) 0xFFFF5A64.toInt() else RED)
+                    }
+                }
+            }
         }
         dialog.show()
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -1079,8 +1105,12 @@ class MainActivity : AppCompatActivity() {
                 .apply()
             status.text = "Minha lista foi limpa."
         }
-        action("Sobre o CineHUB TV", "Versão nativa 0.2.0 • Interface Android/Kotlin • Player Media3") {
-            status.text = "CineHUB TV está em reconstrução nativa. Esta versão ainda é de desenvolvimento."
+        action("Verificar atualização do aplicativo", "Consulta a versão oficial e instala atualizações com verificação de integridade.") {
+            status.text = "Verificando atualizações…"
+            otaUpdateManager?.checkForUpdate(force = true) { message -> status.text = message }
+        }
+        action("Sobre o CineHUB TV", "Versão nativa 1.3.1 • Interface Android/Kotlin • Player Media3") {
+            status.text = "CineHUB TV Kotlin 1.3.1 • Atualizações OTA disponíveis nesta edição."
         }
     }
 
@@ -1238,8 +1268,16 @@ class MainActivity : AppCompatActivity() {
             setPadding(d(0), d(12), d(0), d(8))
         })
         content.addView(label("Pesquise por nome ou categoria. Se um canal tiver mais de uma fonte, o player tentará alternativas quando necessário.", 14, MUTED, false).apply {
-            setPadding(d(0), d(0), d(0), d(14))
+            setPadding(d(0), d(0), d(0), d(10))
         })
+        val guideButton = label("▦  Guia de programação", 15, WHITE, true).apply {
+            setPadding(d(18), d(12), d(18), d(12))
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { showLiveGuide() }
+        }
+        content.addView(guideButton, LinearLayout.LayoutParams(-1, d(50)).apply { bottomMargin = d(10) })
         val search = EditText(this).apply {
             hint = "Buscar canal…"
             setSingleLine(true)
@@ -1281,6 +1319,82 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     status.text = "Não foi possível carregar o catálogo. Confira a internet e tente novamente."
+                }
+            }
+        }
+    }
+
+
+    private fun showLiveGuide() {
+        content.removeAllViews()
+        content.addView(label("Guia de programação", 26, WHITE, true).apply {
+            setPadding(d(0), d(10), d(0), d(6))
+        })
+        val back = label("←  Voltar aos canais ao vivo", 15, WHITE, true).apply {
+            setPadding(d(16), d(10), d(16), d(10))
+            background = focusBackground(PANEL)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnClickListener { showLiveChannels() }
+        }
+        content.addView(back, LinearLayout.LayoutParams(-1, d(48)).apply { bottomMargin = d(8) })
+        val status = label("Carregando programação do CineHUB ACERVO…", 14, MUTED, false).apply {
+            setPadding(d(2), d(8), d(0), d(10))
+        }
+        content.addView(status)
+        val guideRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(guideRows)
+
+        io.execute {
+            val loadedChannels = if (channels.isNotEmpty()) channels
+                else runCatching { CatalogRepository.loadChannels() }.getOrDefault(emptyList())
+            val schedule = runCatching { EpgRepository.load(this@MainActivity) }.getOrDefault(emptyMap())
+            val now = System.currentTimeMillis()
+            val entries = loadedChannels.mapNotNull { channel ->
+                val programmes = EpgRepository.programmesFor(channel, schedule)
+                    .filter { it.endMillis > now }
+                    .take(6)
+                if (programmes.isEmpty()) null else channel to programmes
+            }.sortedBy { it.first.name.lowercase(Locale.ROOT) }
+
+            runOnUiThread {
+                if (currentSection != "Ao vivo" || isFinishing || isDestroyed) return@runOnUiThread
+                channels = loadedChannels
+                guideRows.removeAllViews()
+                status.text = if (entries.isEmpty()) {
+                    "A programação não está disponível neste momento. Tente novamente quando a conexão voltar."
+                } else {
+                    "Programação disponível para ${entries.size} canais · horários de Brasília."
+                }
+                entries.forEach { (channel, programmes) ->
+                    val card = LinearLayout(this).apply {
+                        orientation = LinearLayout.VERTICAL
+                        background = focusBackground(PANEL)
+                        setPadding(d(16), d(12), d(16), d(12))
+                        isFocusable = channel.sources.isNotEmpty()
+                        isFocusableInTouchMode = channel.sources.isNotEmpty()
+                        if (channel.sources.isNotEmpty()) setOnClickListener {
+                            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                                putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, ArrayList(channel.sources))
+                                putExtra(PlayerActivity.EXTRA_URL, channel.primarySource)
+                                putExtra(PlayerActivity.EXTRA_TITLE, channel.name)
+                            })
+                        }
+                    }
+                    card.addView(label(channel.name, 17, WHITE, true).apply { setPadding(d(0), d(0), d(0), d(6)) })
+                    programmes.forEach { programme ->
+                        val current = now >= programme.startMillis && now < programme.endMillis
+                        val line = "${EpgRepository.timeLabel(programme.startMillis)}–${EpgRepository.timeLabel(programme.endMillis)}  •  ${programme.title}"
+                        card.addView(label(if (current) "AGORA  •  $line" else line, 14, if (current) RED else WHITE, current).apply {
+                            setPadding(d(0), d(3), d(0), d(3))
+                        })
+                        if (current && programme.description.isNotBlank()) {
+                            card.addView(label(programme.description.take(180), 12, MUTED, false).apply {
+                                setPadding(d(0), d(0), d(0), d(3))
+                            })
+                        }
+                    }
+                    guideRows.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = d(8) })
                 }
             }
         }
@@ -1389,7 +1503,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        otaUpdateManager?.resumeInstallIfReady()
+    }
+
     override fun onDestroy() {
+        otaUpdateManager?.close()
         mainHandler.removeCallbacks(clockTick)
         mainHandler.removeCallbacks(homeHeroTick)
         io.shutdownNow()

@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val releaseStorePath = System.getenv("CINEHUB_TV_KEYSTORE_PATH")
+
 android {
     namespace = "br.com.cinehub.tv"
     compileSdk = 35
@@ -11,8 +13,8 @@ android {
         applicationId = "br.com.cinehub.tv"
         minSdk = 23
         targetSdk = 28
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 132
+        versionName = "1.3.2"
     }
 
     compileOptions {
@@ -20,6 +22,39 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    // Release signing is enabled only when the CI signing-key environment is present.
+    // Debug builds remain independent from release credentials.
+    signingConfigs {
+        if (!releaseStorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseStorePath)
+                storePassword = System.getenv("CINEHUB_TV_KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("CINEHUB_TV_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("CINEHUB_TV_KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+    // The test APK installs alongside the official app and cannot replace its package.
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            // Explicitly bind the official release variant to the CI-provided signing key.
+            if (!releaseStorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
+    // This APK is distributed directly, not through Google Play. Keep the tested TV targetSdk
+    // unchanged and suppress only Play-store target-SDK policy lint for sideloaded releases.
+    lint {
+        disable += "ExpiredTargetSdkVersion"
+    }
 }
 
 dependencies {
