@@ -13,8 +13,8 @@ android {
         applicationId = "br.com.cinehub.tv"
         minSdk = 23
         targetSdk = 28
-        versionCode = 134
-        versionName = "1.3.4-home-test"
+        versionCode = 135
+        versionName = "1.3.5-catalog-details-test"
     }
 
     compileOptions {
