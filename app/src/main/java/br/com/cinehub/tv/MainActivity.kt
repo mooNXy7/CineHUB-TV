@@ -1016,9 +1016,15 @@ private fun normalizeMediaTitle(value: String): String =
                             person.photoUrl?.let { load(it) { crossfade(true); placeholder(android.graphics.drawable.ColorDrawable(PANEL)) } }
                         }
                         card.addView(photo, LinearLayout.LayoutParams(d(112), d(140)))
-                        card.addView(label(person.name, 13, WHITE, true).apply { maxLines = 2; setPadding(d(2), d(7), d(2), d(2)) })
-                        if (person.character.isNotBlank()) card.addView(label(person.character, 11, MUTED, false).apply { maxLines = 2; setPadding(d(2), d(2), d(2), 0) })
-                        row.addView(card, LinearLayout.LayoutParams(d(132), -2).apply { marginEnd = d(10) })
+                        card.addView(label(person.name, 13, WHITE, true).apply {
+                            maxLines = 2; minLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+                            setPadding(d(2), d(7), d(2), d(2))
+                        })
+                        card.addView(label(person.character.ifBlank { " " }, 11, MUTED, false).apply {
+                            maxLines = 2; minLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+                            setPadding(d(2), d(2), d(2), 0)
+                        })
+                        row.addView(card, LinearLayout.LayoutParams(d(132), d(230)).apply { marginEnd = d(10) })
                     }
                     scroll.addView(row); castSection.addView(scroll, LinearLayout.LayoutParams(-1, -2))
                 }
