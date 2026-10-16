@@ -1,1605 +1,1509 @@
 package com.cinehub.player
 
 import android.app.Activity
-import android.app.ActivityManager
+import android.content.Context
+import org.json.JSONArray
 import android.content.Intent
 import android.net.Uri
-import android.graphics.Color
-import android.graphics.BitmapFactory
-import android.text.InputType
-import android.util.TypedValue
-import android.util.Log
-import android.view.Gravity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Base64
+import android.widget.Toast
 import android.view.KeyEvent
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
+import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.HorizontalScrollView
-import android.widget.ImageView
-import android.widget.Toast
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.FileDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
-import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.text.DefaultSubtitleParserFactory
+import androidx.media3.extractor.text.SubtitleExtractor
+import androidx.media3.session.MediaSession
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
-import com.cinehub.player.saimo.Playback as SaimoPlayback
-import com.cinehub.player.saimo.Source as SaimoSource
-import androidx.media3.ui.TrackSelectionDialogBuilder
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.util.concurrent.Executors
+import androidx.media3.ui.SubtitleView
+import coil3.load
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import android.media.AudioManager
+import android.os.Build
 
 /**
- * Minimal native playback shell. Launch with:
- * ACTION_VIEW data=<stream URL>, or extras "url", "sources" (StringArrayList),
- * "live" (Boolean), "content_id" and optional "subtitle_url".
+ * O player de filmes e séries.
+ *
+ * Antes o vídeo tocava dentro da tela do acervo, com o controle padrão do
+ * Media3 e uma fonte só: quando ela morria, a tela ficava preta para sempre e
+ * ninguém dizia nada. Aqui o player tem a própria tela e sabe:
+ *
+ * - tentar todas as fontes do título, a versão escolhida primeiro, com prazo
+ *   para cada uma, e dizer claramente quando nenhuma abriu;
+ * - perguntar se continua de onde parou;
+ * - pular abertura e recapitulação nos tempos marcados no TheIntroDB;
+ * - oferecer o próximo episódio quando os créditos começam;
+ * - avançar e voltar acelerando enquanto a seta fica apertada.
  */
 @UnstableApi
-class PlayerActivity : Activity() {
-    private lateinit var playerView: PlayerView
+class PlayerActivity : AppCompatActivity() {
+
+    companion object {
+        /// Altura da legenda (fração da tela, de baixo) com a barra e os botões à vista.
+        private const val LEGENDA_COM_CONTROLES = 0.3f
+        private const val TEMPORADA = "player.temporada"
+        private const val EPISODIO = "player.episodio"
+        private const val VERSAO = "player.versao"
+        private const val DO_INICIO = "player.inicio"
+
+        /// Fonte que não entrega imagem até aqui é fonte morta que não deu erro.
+        private const val PRAZO_MS = 15_000L
+        private const val ESCONDER_MS = 5_000L
+        private const val CONTAGEM_S = 10
+        private const val ICONE_PLAY = "\u0000play"
+        private const val ICONE_REPLAY = "\u0000replay"
+
+        const val EXTRA_DIRECT_URL = "player.direct_url"
+        const val EXTRA_START_TIME = "player.start_time"
+
+        fun abrir(
+            context: Context,
+            alvo: Alvo,
+            temporada: Int = 0,
+            episodio: Int = 0,
+            versao: String? = null,
+            doInicio: Boolean = false,
+            directUrl: String? = null,
+            startTime: Long? = null,
+        ) {
+            val intent = alvo.em(Intent(context, PlayerActivity::class.java))
+                .putExtra(TEMPORADA, temporada)
+                .putExtra(EPISODIO, episodio)
+                .putExtra(VERSAO, versao)
+                .putExtra(DO_INICIO, doInicio)
+            if (!directUrl.isNullOrBlank()) {
+                intent.putExtra(EXTRA_DIRECT_URL, directUrl)
+            }
+            if (startTime != null && startTime > 0) {
+                intent.putExtra(EXTRA_START_TIME, startTime)
+            }
+            if (context !is Activity) {
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            } else {
+                intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            context.startActivity(intent)
+        }
+    }
+
+    private lateinit var alvo: Alvo
+    private lateinit var video: PlayerView
+    private lateinit var carregando: View
+    private lateinit var status: TextView
+    private lateinit var topo: View
+    private lateinit var base: View
+    private lateinit var titulo: TextView
+    private lateinit var subtitulo: TextView
+    private lateinit var resolucao: TextView
+    private lateinit var relogio: TextView
+    private lateinit var bolha: TextView
+    private lateinit var linha: View
+    private lateinit var agora: TextView
+    private lateinit var total: TextView
+    private lateinit var barra: ProgressBar
+    private lateinit var botoes: LinearLayout
+    private lateinit var pular: TextView
+    private lateinit var proximo: View
+    private lateinit var aviso: View
+
+    private val handler = Handler(Looper.getMainLooper())
+    private val hora = SimpleDateFormat("HH:mm", Locale("pt", "BR"))
+
     private var player: ExoPlayer? = null
-    private var sourceUrls: List<String> = emptyList()
-    private var sourceReferers: List<String> = emptyList()
-    private var attempted = mutableSetOf<String>()
-    private var currentIndex = 0
-    private var sourceRequestToken = 0
-    private var backgrounding = false
-    private var resumeAfterStop = false
-    private var isLive = false
-    private var isRadio = false
-    private var radioName = "Rádio CineHUB"
-    private var radioGenre = ""
+    private var sessao: MediaSession? = null
+
+    private var resolvido: Titulos.Resolvido? = null
+    private var isLiveStream = false
+    private var isRadioStream = false
+    private var sourceReferers: Map<String, String> = emptyMap()
+    private var sourceUserAgents: Map<String, String> = emptyMap()
     private var radioExperience: RadioExperienceView? = null
-    private var contentId = "unknown"
-    private var seriesId = ""
-    private var catalogCategory = ""
-    private var catalogItemId = ""
-    private var catalogGenres: List<String> = emptyList()
-    private var tmdbId = 0
-    private var seasonNumber = 0
-    private var episodeNumber = 0
-    private var introMarkers: List<IntroMarker> = emptyList()
-    private val promptedIntroMarkers = mutableSetOf<String>()
-    private var introCheckRunnable: Runnable? = null
-    private var introPrompt: android.app.AlertDialog? = null
-    private var subtitleUrl: String? = null
-    private var originalSubtitleUrl: String? = null
-    private var internalSubtitleFile: File? = null
-    private var subtitleDelayMs = 0L
-    private var subtitleMimeTypeOverride: String? = null
-    private val subtitleExecutor = Executors.newSingleThreadExecutor()
-    private var startupCheck: Runnable? = null
-    private var startupTimeoutMs = 15_000L
-    private val handler = android.os.Handler(mainLooper)
-    private val posterExecutor = Executors.newSingleThreadExecutor()
-    private val providerResolverExecutor = Executors.newSingleThreadExecutor()
-    private val resolvedProviderUrls = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
-    private val resolvedEmbedProviderUrls =
-        java.util.concurrent.ConcurrentHashMap<String, Pair<Long, ProviderUrlResolver.ResolvedSource>>()
-    private val speeds = listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-    private var speedIndex = 1
-    private lateinit var speedButton: Button
-    private var subtitleSizeSp = 22f
-    private var subtitleBackground = true
-    private var episodeQueue: List<QueuedEpisode> = emptyList()
-    private var queueIndex = 0
-    private var nextEpisodeDialog: android.app.AlertDialog? = null
-    private var nextEpisodeRunnable: Runnable? = null
-    private var nextPromptShown = false
-    private var failureDialogShown = false
-    private var lastPlaybackErrorMessage: String? = null
-    private var stillWatchingRunnable: Runnable? = null
-    private var stillWatchingDialog: android.app.AlertDialog? = null
-    private var progressSaveRunnable: Runnable? = null
-    private var startupFailed: Boolean = false
-    private val progressSaveIntervalMs = 15_000L
-    private val stillWatchingIntervalMs = 2L * 60L * 60L * 1_000L
+    private var ep: Titulos.Ep? = null
+    private var versao = "dub"
+    private var opcoes: List<Titulos.Opcao> = emptyList()
+    private var fonte = 0
+    /// Fontes já tentadas neste episódio (a automática pula as tentadas).
+    private val tentadas = mutableSetOf<Int>()
+    /// Fonte em que a série toca (servidor e posição na lista): o episódio
+    /// seguinte começa por uma parecida. Vive só nesta sessão de player.
+    private var preferidaServidor = ""
+    private var preferidaPosicao = -1
+    private var retomadas = 0
+    private var tocou = false
+    private var tentativaDesde = 0L
+    private var marcas: Pulos.Marcas? = null
+    /// Legendas do OpenSubtitles: as do título, a escolhida (com o arquivo já
+    /// baixado) e o atraso dela. Trocar de fonte não as perde.
+    private var legendasExt: List<Legendas.Opcao> = emptyList()
+    private var legendaExt: Legendas.Opcao? = null
+    private var legendaExtSrt: String? = null
+    private var legendaAtraso = 0.0
+    private var selecionarLegendaExt = false
+    private var infoEpisodios: Map<Int, Detalhes.EpisodioTmdb> = emptyMap()
+    /// Episódios seguidos que começaram sozinhos — o "ainda está assistindo?".
+    private var seguidosSozinhos = 0
+    private var comecouSozinho = false
+    private var pausaAutoplayDesativada = false
+    private var trechoPulado: Pulos.Trecho? = null
+    private var proximoDispensado = false
+    private var contagem = -1
+    private var travadas = 0
+    private var travouDesde = 0L
+    private var reduziu = false
+    private var velocidade = 1.0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-        CatalogClient.initialize(applicationContext)
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-
-        isRadio = intent.getBooleanExtra("radio", false) ||
-            intent.getStringExtra("content_type").equals("radio", ignoreCase = true)
-        isLive = intent.getBooleanExtra("live", false) && !isRadio
-        startupTimeoutMs = getSharedPreferences("player-settings", MODE_PRIVATE)
-            .getInt("source_timeout_seconds", 15).coerceIn(10, 45) * 1_000L
-        radioName = intent.getStringExtra("radio_name")?.trim().orEmpty().ifBlank { "Rádio CineHUB" }
-        radioGenre = intent.getStringExtra("radio_genre")?.trim().orEmpty()
-        contentId = intent.getStringExtra("content_id") ?: "unknown"
-        seriesId = intent.getStringExtra("series_id").orEmpty()
-        catalogCategory = intent.getStringExtra("catalog_category").orEmpty()
-        catalogItemId = intent.getStringExtra("catalog_item_id").orEmpty()
-        catalogGenres = intent.getStringArrayListExtra("catalog_genres")?.toList().orEmpty()
-        tmdbId = intent.getIntExtra("tmdb_id", 0).coerceAtLeast(0)
-        seasonNumber = intent.getIntExtra("season_number", 0).coerceAtLeast(0)
-        episodeNumber = intent.getIntExtra("episode_number", 0).coerceAtLeast(0)
-        // Never pass an untrusted intent subtitle URI to Media3 (e.g. file:// or content://).
-        subtitleUrl = intent.getStringExtra("subtitle_url")
-            ?.trim()
-            ?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl)
-        episodeQueue = parseEpisodeQueue(intent.getStringExtra("episode_queue").orEmpty())
-        val suppliedCurrentQueueIndex = intent.getIntExtra("episode_queue_current_index", -1)
-        queueIndex = if (suppliedCurrentQueueIndex in episodeQueue.indices) {
-            suppliedCurrentQueueIndex + 1
-        } else {
-            0
-        }
-        val urls = intent.getStringArrayListExtra("sources")?.toList().orEmpty()
-        val suppliedReferers = intent.getStringArrayListExtra("source_referers")?.toList().orEmpty()
-        val singleUrl = intent.getStringExtra("url") ?: intent.dataString
-        val sourcePairs = urls.mapIndexed { index, url -> url to suppliedReferers.getOrNull(index).orEmpty() } +
-            listOfNotNull(singleUrl?.let { it to "" })
-        val uniquePairs = sourcePairs.mapNotNull { (rawUrl, rawReferer) ->
-            val url = rawUrl.trim()
-            if (!PlaybackUrlPolicy.isSafeHttpUrl(url)) null
-            else url to rawReferer.takeIf(PlaybackUrlPolicy::isSafeHttpUrl).orEmpty()
-        }.distinctBy { it.first }
-        sourceUrls = uniquePairs.map { it.first }
-        sourceReferers = uniquePairs.map { it.second }
-
-        playerView = PlayerView(this).apply {
-            useController = !isRadio
-            if (isRadio) visibility = View.GONE
-            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-            keepScreenOn = true
-        }
-        val root = FrameLayout(this)
-        root.addView(playerView, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        ))
-        if (!isRadio) {
-            val controls = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                setPadding(12, 8, 12, 8)
-                setBackgroundColor(Color.argb(190, 20, 20, 20))
-            }
-            controls.addView(Button(this).apply {
-                text = "Áudio / Legendas"
-                contentDescription = "Selecionar faixas de áudio e legendas"
-                setOnClickListener { showTrackMenu() }
-            })
-            controls.addView(Button(this).apply {
-                text = "Legendas online"
-                contentDescription = "Buscar legendas online ou inserir uma URL externa"
-                setOnClickListener { showSubtitleOptions() }
-            })
-            controls.addView(Button(this).apply {
-                text = "Sincr. legenda"
-                contentDescription = "Ajustar o atraso da legenda externa"
-                setOnClickListener { showSubtitleSyncOptions() }
-            })
-            controls.addView(Button(this).apply {
-                text = "Estilo legenda"
-                contentDescription = "Alterar tamanho e fundo da legenda"
-                setOnClickListener { showSubtitleStyleOptions() }
-            })
-            if (!isLive && episodeQueue.isNotEmpty()) {
-                controls.addView(Button(this).apply {
-                    text = "Temporadas / episódios"
-                    contentDescription = "Abrir temporadas e episódios disponíveis"
-                    setOnClickListener { showSeasonQueuePicker() }
-                })
-            }
-            speedButton = Button(this).apply {
-                text = "Velocidade 1.0×"
-                contentDescription = "Alterar velocidade de reprodução"
-                setOnClickListener { cycleSpeed() }
-            }
-            controls.addView(speedButton)
-            // Keep all player actions reachable on narrow TV screens and 720p TV boxes.
-            val controlsScroll = HorizontalScrollView(this).apply {
-                isHorizontalScrollBarEnabled = false
-                isFillViewport = true
-                overScrollMode = View.OVER_SCROLL_NEVER
-                addView(controls, FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT
-                ))
-            }
-            // Keep the custom action strip away from Media3's own timeline/controller at the bottom.
-            root.addView(controlsScroll, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.TOP
-            ))
-    
-        } else {
-            val radioScreen = RadioExperienceView(
+        Preferencias.iniciar(applicationContext)
+        Vr.iniciar(application)
+        Aparelho.conhecer(applicationContext)
+        val kind = intent.getStringExtra("content_type").orEmpty().lowercase()
+        isLiveStream = kind in setOf("live", "tv", "channel", "canal")
+        isRadioStream = kind == "radio"
+        alvo = Alvo.de(intent) ?: run { finish(); return }
+        setContentView(R.layout.activity_player)
+        if (Vr.ativo) Vr.videoEmTextura(this, R.id.playerVideo)
+        video = findViewById(R.id.playerVideo)
+        if (isRadioStream) {
+            video.useController = false
+            val radio = RadioExperienceView(
                 context = this,
-                stationName = radioName,
-                genre = radioGenre,
+                stationName = intent.getStringExtra("radio_name")?.trim().orEmpty().ifBlank { alvo.titulo },
+                genre = intent.getStringExtra("radio_genre")?.trim().orEmpty(),
                 onBack = { finish() },
                 onPlayPause = {
-                    player?.let { exo ->
-                        if (exo.isPlaying) exo.pause() else exo.play()
-                    }
-                },
-                onChangeStation = { showRadioStationPicker() }
+                    player?.let { if (it.isPlaying) it.pause() else it.play() }
+                }
             )
-            radioExperience = radioScreen
-            root.addView(radioScreen, FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            ))
+            radioExperience = radio
+            findViewById<FrameLayout>(R.id.playerRaiz).addView(
+                radio,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+            )
         }
-        setContentView(root)
-        TvUi.style(root)
+        carregando = findViewById(R.id.playerCarregando)
+        status = findViewById(R.id.playerStatus)
+        topo = findViewById(R.id.playerTopo)
+        base = findViewById(R.id.playerBase)
+        titulo = findViewById(R.id.playerTitulo)
+        subtitulo = findViewById(R.id.playerSubtitulo)
+        resolucao = findViewById(R.id.playerResolucao)
+        relogio = findViewById(R.id.playerRelogio)
+        bolha = findViewById(R.id.playerBolha)
+        linha = findViewById(R.id.playerLinha)
+        agora = findViewById(R.id.playerAgora)
+        total = findViewById(R.id.playerTotal)
+        barra = findViewById(R.id.playerProgresso)
+        botoes = findViewById(R.id.playerBotoes)
+        pular = findViewById(R.id.playerPular)
+        proximo = findViewById(R.id.playerProximo)
+        aviso = findViewById(R.id.playerAviso)
 
-        if (sourceUrls.isEmpty()) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Nenhuma fonte válida")
-                .setMessage("O catálogo não entregou uma URL HTTP(S) que o player consiga abrir.")
-                .setCancelable(false)
-                .setPositiveButton("Voltar ao catálogo") { _, _ -> finish() }
-                .show()
+        versao = intent.getStringExtra(VERSAO) ?: Preferencias.versao
+        titulo.text = Generos.semAno(alvo.titulo)
+        status.text = getString(R.string.player_abrindo)
+        estiloDaLegenda()
+
+        pular.setOnClickListener { pularTrecho() }
+        Icones.inicio(findViewById(R.id.proximoAgora), R.drawable.ic_play)
+        findViewById<View>(R.id.proximoAgora).setOnClickListener { irParaProximo(sozinho = false) }
+        findViewById<View>(R.id.proximoCancelar).setOnClickListener { dispensarProximo() }
+        linha.setOnKeyListener { _, codigo, evento ->
+            if (evento.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            when (codigo) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> { acumularPulo(-1, evento.repeatCount); true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { acumularPulo(1, evento.repeatCount); true }
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { alternarPausa(); true }
+                else -> false
+            }
+        }
+
+        if (Vr.ativo) montarVr()
+
+        lifecycleScope.launch(semDerrubar) { preparar() }
+        handler.post(tique)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val novoAlvo = Alvo.de(intent) ?: return
+        val kind = intent.getStringExtra("content_type").orEmpty().lowercase()
+        isLiveStream = kind in setOf("live", "tv", "channel", "canal", "iptv")
+        isRadioStream = kind == "radio"
+        alvo = novoAlvo
+        titulo.text = Generos.semAno(alvo.titulo)
+        versao = intent.getStringExtra(VERSAO) ?: Preferencias.versao
+        status.text = getString(R.string.player_abrindo)
+        carregando.visibility = View.VISIBLE
+        mostrarCarregando(getString(R.string.player_abrindo))
+        player?.stop()
+        resolvido = null
+        ep = null
+        lifecycleScope.launch(semDerrubar) { preparar() }
+    }
+
+
+    // MARK: - Óculos de VR
+
+    /**
+     * Só nos óculos (ver Vr.kt). Sem D-pad, a barra do filme era um desenho:
+     * não se chegava a ela, nem se pulava, nem se escondia. Aqui pinçar sobre
+     * o vídeo mostra e esconde os controles, a barra de tempo se arrasta e a
+     * fileira de botões ganha voltar e 10 s para trás e para a frente.
+     */
+    private fun montarVr() {
+        val raiz = findViewById<android.view.ViewGroup>(R.id.playerRaiz)
+        Vr.camadaDeToque(raiz, 1) {
+            if (base.visibility == View.VISIBLE) esconderControles() else mostrarControles(focarLinha = false)
+        }
+        Vr.arrastavel(linha, barra,
+            aoMover = { fracao -> arrastarPara(fracao) },
+            aoSoltar = { fracao ->
+                arrastarPara(fracao)
+                handler.removeCallbacks(confirmarPulo)
+                confirmarPulo.run()
+            })
+    }
+
+    /** O ponto sob o dedo vira o destino do pulo, mostrado na bolha até soltar. */
+    private fun arrastarPara(fracao: Float) {
+        val p = player ?: return
+        val duracao = p.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: return
+        val destino = (duracao * fracao).toLong().coerceIn(0, (duracao - 1_000).coerceAtLeast(0))
+        alvoDoPulo = destino
+        bolha.text = tempo(destino)
+        bolha.visibility = View.VISIBLE
+        atualizarTempo()
+        adiarEsconder()
+    }
+
+    // MARK: - O que tocar
+
+    /** A logo do título à esquerda do nome, no topo; sem logo no TMDB, só o nome. */
+    private fun mostrarLogo(r: Titulos.Resolvido) {
+        lifecycleScope.launch(semDerrubar) {
+            val url = Detalhes.de(r.alvo.titulo, r.serie, r.tmdbId.takeIf { it > 0 })?.logo ?: return@launch
+            if (isFinishing || isDestroyed) return@launch
+            val logo = findViewById<ImageView>(R.id.playerLogo)
+            logo.load(url) {
+                listener(onSuccess = { _, _ -> logo.visibility = View.VISIBLE })
+            }
+        }
+    }
+
+    private suspend fun preparar() {
+        val arraySources = runCatching { intent.getStringArrayListExtra("sources")?.toList().orEmpty() }.getOrDefault(emptyList())
+        val encodedSources = runCatching { intent.getStringExtra("sources_json") ?: intent.getStringExtra("sources") }.getOrNull()
+        val jsonSources = runCatching {
+            val array = JSONArray(encodedSources.orEmpty())
+            buildList { for (i in 0 until minOf(array.length(), 30)) add(array.optString(i)) }
+        }.getOrDefault(emptyList())
+        val directUrls = (arraySources + jsonSources +
+            listOfNotNull(intent.getStringExtra(EXTRA_DIRECT_URL), intent.getStringExtra("url"), intent.dataString))
+            .map(String::trim)
+            .filter(PlaybackUrlPolicy::isSafeHttpUrl)
+            .distinct()
+            .take(30)
+        val queueRaw = intent.getStringExtra("episode_queue").orEmpty()
+        val queue = parseCineHubEpisodeQueue(queueRaw)
+        val topReferers = runCatching { intent.getStringArrayListExtra("source_referers")?.toList().orEmpty() }.getOrDefault(emptyList()).mapIndexedNotNull { i, value -> directUrls.getOrNull(i)?.let { url -> value.trim().takeIf { it.isNotBlank() }?.let { url to it } } }.toMap()
+        val topUserAgents = runCatching { intent.getStringArrayListExtra("source_user_agents")?.toList().orEmpty() }.getOrDefault(emptyList()).mapIndexedNotNull { i, value -> directUrls.getOrNull(i)?.let { url -> value.trim().takeIf { it.isNotBlank() }?.let { url to it } } }.toMap()
+        sourceReferers = parseEpisodeQueueHeaders(queueRaw, "source_referers") + topReferers
+        sourceUserAgents = parseEpisodeQueueHeaders(queueRaw, "source_user_agents") + topUserAgents
+        val queueCurrentIndex = intent.getIntExtra("episode_queue_current_index", -1)
+        val indexedEpisode = queue.getOrNull(queueCurrentIndex)
+        val tmdb = intent.getIntExtra("tmdb_id", alvo.tmdbId).coerceAtLeast(0)
+        val isSeries = !isLiveStream && !isRadioStream && (alvo.serie || queue.isNotEmpty())
+        val r = if (directUrls.isNotEmpty()) {
+            if (isSeries) {
+                val currentSeason = intent.getIntExtra("season_number", intent.getIntExtra("season", indexedEpisode?.temporada ?: 0)).coerceAtLeast(0)
+                val currentEpisode = intent.getIntExtra("episode_number", intent.getIntExtra("episode", indexedEpisode?.numero ?: 0)).coerceAtLeast(0)
+                val all = queue.map { item -> if (item.temporada == currentSeason && item.numero == currentEpisode) item.copy(fontes = mapOf("dub" to directUrls)) else item }.toMutableList()
+                if (currentSeason > 0 && currentEpisode > 0 && all.none { it.temporada == currentSeason && it.numero == currentEpisode }) {
+                    all.add(Titulos.Ep(currentSeason, currentEpisode, mapOf("dub" to directUrls)))
+                }
+                all.sortWith(compareBy({ it.temporada }, { it.numero }))
+                val current = all.firstOrNull { it.temporada == currentSeason && it.numero == currentEpisode }
+                    ?: Titulos.Ep(currentSeason.coerceAtLeast(1), currentEpisode.coerceAtLeast(1), mapOf("dub" to directUrls))
+                val eps = (all + current).distinctBy { it.temporada to it.numero }.sortedWith(compareBy({ it.temporada }, { it.numero }))
+                Titulos.Resolvido(alvo.copy(serie = true, tmdbId = tmdb), alvo.titulo, null, eps, tmdb, reservado = isLiveStream || isRadioStream)
+            } else {
+                val filme = Filme(alvo.titulo, mapOf("dub" to directUrls))
+                Titulos.Resolvido(alvo.copy(tmdbId = tmdb), alvo.titulo, filme, emptyList(), tmdb, reservado = isLiveStream || isRadioStream)
+            }
+        } else {
+            Titulos.resolver(this, alvo)
+        }
+        if (isFinishing || isDestroyed) return
+        if (r == null) {
+            mostrarErro(getString(R.string.player_sumiu_titulo), getString(R.string.player_sumiu_texto))
             return
         }
-
-        val profile = getSharedPreferences("player-settings", MODE_PRIVATE)
-            .getString("memory_profile", "auto") ?: "auto"
-        val activityManager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
-        val memoryInfo = ActivityManager.MemoryInfo()
-        activityManager.getMemoryInfo(memoryInfo)
-        // Use device memory, not the app heap cap: a 1 GB TV box can have a larger heap.
-        val lowMemory = when (profile) {
-            "low" -> true
-            "normal" -> false
-            else -> activityManager.isLowRamDevice ||
-                memoryInfo.totalMem <= 1_536L * 1024L * 1024L
-        }
-        val trackSelector = DefaultTrackSelector(this)
-        // Conservative ceiling for low-memory TV boxes; normal devices keep source-native resolution.
-        if (lowMemory) {
-            trackSelector.parameters = trackSelector.buildUponParameters()
-                .setMaxVideoSize(1280, 720)
-                .build()
-        }
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                if (lowMemory) 2_500 else 5_000,
-                if (lowMemory) 12_000 else 30_000,
-                if (lowMemory) 750 else 1_000,
-                if (lowMemory) 1_500 else 2_000
-            )
-            .setTargetBufferBytes(
-                if (lowMemory) 32 * 1024 * 1024 else 96 * 1024 * 1024
-            )
-            .setPrioritizeTimeOverSizeThresholds(!lowMemory)
-            .build()
-
-        player = ExoPlayer.Builder(this)
-            .setRenderersFactory(DefaultRenderersFactory(this).setEnableDecoderFallback(true))
-            .setTrackSelector(trackSelector)
-            .setLoadControl(loadControl)
-            .build().also { exo ->
-                if (!isRadio) playerView.player = exo
-                exo.addListener(object : Player.Listener {
-                    override fun onPlayerError(error: PlaybackException) {
-                        lastPlaybackErrorMessage = "${error.errorCodeName}: ${error.message.orEmpty()}"
-                        if (isRadio) radioExperience?.setPlaybackState(false, errorMessage = "Falha no sinal. Tentando outra fonte…")
-                        tryNextSource()
-                    }
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (isRadio) {
-                            radioExperience?.setPlaybackState(
-                                isPlaying = this@PlayerActivity.player?.isPlaying == true,
-                                isBuffering = playbackState == Player.STATE_BUFFERING
-                            )
-                        }
-                        if (playbackState == Player.STATE_BUFFERING && startupCheck == null) {
-                            // Also protect against a stream that worked initially and then stalls.
-                            startupCheck = Runnable {
-                                if (player?.playbackState == Player.STATE_BUFFERING) tryNextSource()
-                            }.also { handler.postDelayed(it, startupTimeoutMs) }
-                        }
-                        if (playbackState == Player.STATE_READY) {
-                            startupCheck?.let(handler::removeCallbacks)
-                            startupCheck = null
-                            if (seriesId.isNotBlank()) {
-                                val activeUrl = sourceUrls.getOrNull(currentIndex).orEmpty()
-                                val host = runCatching { Uri.parse(activeUrl).host.orEmpty() }.getOrDefault("")
-                                if (host.isNotBlank()) {
-                                    getSharedPreferences("player-settings", MODE_PRIVATE).edit()
-                                        .putString("preferred_source_host_$seriesId", host)
-                                        .apply()
-                                }
-                            }
-                            if (!isLive && !isRadio) {
-                                val savedPosition = getSharedPreferences("playback-progress", MODE_PRIVATE)
-                                    .getLong(contentId, 0L)
-                                if (savedPosition > 0L && (this@PlayerActivity.player?.currentPosition ?: 0L) < 5_000L) {
-                                    this@PlayerActivity.player?.seekTo(savedPosition)
-                                }
-                                if (this@PlayerActivity.player?.isPlaying == true) {
-                                    scheduleStillWatchingPrompt()
-                                    scheduleProgressSave()
-                                }
-                            }
-                        } else if (playbackState == Player.STATE_ENDED && isRadio) {
-                            handler.post { if (!isFinishing && isRadio) tryNextSource() }
-                        } else if (playbackState == Player.STATE_ENDED && !isLive) {
-                            handleVodPlaybackEnded()
-                        } else if (playbackState == Player.STATE_ENDED && isLive) {
-                            // LIVE feeds can end cleanly at protocol level while the source is dead.
-                            // Treat that as a source failure and try the next known endpoint.
-                            handler.post {
-                                if (!isFinishing && isLive) tryNextSource()
-                            }
-                        }
-                    }
-
-                    override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                        // TV channels stay continuous; radio deliberately supports pause/resume.
-                        if (isLive && !isRadio && !playWhenReady && !backgrounding) {
-                            this@PlayerActivity.player?.play()
-                        } else if (!isLive && !isRadio) {
-                            if (playWhenReady) {
-                                scheduleStillWatchingPrompt()
-                                scheduleProgressSave()
-                            } else {
-                                cancelStillWatchingPrompt()
-                                cancelProgressSave()
-                                persistPlaybackProgress()
-                            }
-                        }
-                        if (isRadio) {
-                            radioExperience?.setPlaybackState(
-                                isPlaying = this@PlayerActivity.player?.isPlaying == true,
-                                isBuffering = this@PlayerActivity.player?.playbackState == Player.STATE_BUFFERING
-                            )
-                        }
-                    }
-
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        if (isRadio) {
-                            radioExperience?.setPlaybackState(
-                                isPlaying = isPlaying,
-                                isBuffering = this@PlayerActivity.player?.playbackState == Player.STATE_BUFFERING
-                            )
-                        }
-                        if (!isLive && !isRadio) {
-                            if (isPlaying) scheduleProgressSave()
-                            else {
-                                cancelProgressSave()
-                                persistPlaybackProgress()
-                            }
-                        }
-                    }
-                })
-            }
-        playSource(0)
-        loadIntroMarkers()
-        } catch (failure: Throwable) {
-            startupFailed = true
-            Log.e("CINEHUB_PLAYER_STARTUP_CRASH", "Player startup failed", failure)
-            val details = buildString {
-                append(failure.javaClass.name)
-                append("\n")
-                append(failure.message ?: "Sem mensagem de erro")
-                append("\n\n")
-                append(Log.getStackTraceString(failure).take(4200))
-            }
-            getSharedPreferences("player-diagnostics", MODE_PRIVATE).edit()
-                .putString("last_startup_exception", details)
-                .putLong("last_startup_exception_at", System.currentTimeMillis())
-                .apply()
-            runCatching {
-                val dialog = android.app.AlertDialog.Builder(this)
-                    .setTitle("Falha ao iniciar o player")
-                    .setMessage(details)
-                    .setCancelable(false)
-                    .setPositiveButton("Voltar") { _, _ -> finish() }
-                    .create()
-                dialog.setOnDismissListener { if (!isFinishing) finish() }
-                dialog.show()
-            }.onFailure {
-                Toast.makeText(this, "Falha no player: ${failure.javaClass.simpleName}: ${failure.message}", Toast.LENGTH_LONG).show()
-                finish()
-            }
-            return
-        }
+        resolvido = r
+        mostrarLogo(r)
+        val t = intent.getIntExtra(TEMPORADA, intent.getIntExtra("season_number", intent.getIntExtra("season", indexedEpisode?.temporada ?: 0)))
+        val e = intent.getIntExtra(EPISODIO, intent.getIntExtra("episode_number", intent.getIntExtra("episode", indexedEpisode?.numero ?: 0)))
+        ep = if (r.serie) {
+            (if (t > 0) r.episodio(t, e) else null) ?: Titulos.ondeContinuar(this, r)
+        } else null
+        val castStart = intent.getLongExtra(EXTRA_START_TIME, intent.getLongExtra("start_position_ms", 0L) / 1000L)
+        comecar(pedirRetomada = castStart <= 0 && !intent.getBooleanExtra(DO_INICIO, false), startTime = castStart)
     }
 
-    override fun onUserInteraction() {
-        super.onUserInteraction()
-        scheduleStillWatchingPrompt()
-    }
-
-    private fun scheduleProgressSave() {
-        cancelProgressSave()
-        if (isLive || isRadio || isFinishing || player?.isPlaying != true) return
-        progressSaveRunnable = object : Runnable {
-            override fun run() {
-                progressSaveRunnable = null
-                if (isFinishing || isLive) return
-                persistPlaybackProgress()
-                if (player?.isPlaying == true) {
-                    progressSaveRunnable = this
-                    handler.postDelayed(this, progressSaveIntervalMs)
-                }
-            }
-        }.also { handler.postDelayed(it, progressSaveIntervalMs) }
-    }
-
-    private fun cancelProgressSave() {
-        progressSaveRunnable?.let(handler::removeCallbacks)
-        progressSaveRunnable = null
-    }
-
-    private fun persistPlaybackProgress() {
-        if (isLive || isRadio) return
-        val exo = player
-        val savedPosition = PlaybackProgressPolicy.positionToPersist(
-            positionMs = exo?.currentPosition ?: -1L,
-            durationMs = exo?.duration ?: C.TIME_UNSET,
-            isReady = exo?.playbackState == Player.STATE_READY,
-            isEnded = exo?.playbackState == Player.STATE_ENDED
-        )
-        // If playback is buffering/failed, preserve the previous resume point.
-        if (savedPosition != null) {
-            getSharedPreferences("playback-progress", MODE_PRIVATE).edit()
-                .putLong(contentId, savedPosition).apply()
-        }
-    }
-
-    private fun scheduleStillWatchingPrompt() {
-        cancelStillWatchingPrompt()
-        if (isLive || isRadio || isFinishing || player?.isPlaying != true) return
-        stillWatchingRunnable = Runnable {
-            stillWatchingRunnable = null
-            if (isFinishing || isLive || player?.isPlaying != true) return@Runnable
-            player?.pause()
-            val dialog = android.app.AlertDialog.Builder(this)
-                .setTitle("Ainda está assistindo?")
-                .setMessage("A reprodução está ativa há duas horas. Deseja continuar?")
-                .setPositiveButton("Continuar assistindo") { _, _ -> player?.play() }
-                .setNegativeButton("Pausar") { _, _ -> player?.pause() }
-                .create()
-            stillWatchingDialog = dialog
-            dialog.setOnCancelListener {
-                stillWatchingDialog = null
-                player?.play()
-            }
-            dialog.setOnDismissListener { stillWatchingDialog = null }
-            dialog.show()
-        }.also { handler.postDelayed(it, stillWatchingIntervalMs) }
-    }
-
-    private fun cancelStillWatchingPrompt() {
-        stillWatchingRunnable?.let(handler::removeCallbacks)
-        stillWatchingRunnable = null
-    }
-
-    private fun loadIntroMarkers() {
-        introCheckRunnable?.let(handler::removeCallbacks)
-        introCheckRunnable = null
-        introMarkers = emptyList()
-        promptedIntroMarkers.clear()
-        introPrompt?.dismiss()
-        introPrompt = null
-        if (isLive || tmdbId <= 0) return
-        IntroSkipClient.load(tmdbId, seasonNumber, episodeNumber) { markers ->
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                introMarkers = markers
-                scheduleIntroCheck()
-            }
-        }
-    }
-
-    private fun scheduleIntroCheck() {
-        if (isLive || introMarkers.isEmpty() || isFinishing || introCheckRunnable != null) return
-        introCheckRunnable = object : Runnable {
-            override fun run() {
-                if (isFinishing || isDestroyed || isLive) {
-                    introCheckRunnable = null
-                    return
-                }
-                val exo = player
-                if (exo?.playbackState == Player.STATE_READY && introPrompt?.isShowing != true) {
-                    val marker = IntroSkipPolicy.activeMarker(
-                        positionMs = exo.currentPosition,
-                        durationMs = exo.duration.takeIf { it > 0L } ?: 0L,
-                        markers = introMarkers,
-                        alreadyPrompted = promptedIntroMarkers
-                    )
-                    if (marker != null) {
-                        promptedIntroMarkers.add(marker.key)
-                        showIntroSkipPrompt(marker)
+    private fun parseEpisodeQueueHeaders(raw: String, field: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildMap {
+                for (i in 0 until minOf(array.length(), 500)) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val sources = item.optJSONArray("sources") ?: continue
+                    val headers = item.optJSONArray(field) ?: continue
+                    for (j in 0 until minOf(sources.length(), headers.length(), 30)) {
+                        val url = sources.optString(j).trim()
+                        val value = headers.optString(j).trim()
+                        if (PlaybackUrlPolicy.isSafeHttpUrl(url) && value.isNotBlank()) put(url, value)
                     }
                 }
-                handler.postDelayed(this, 1_000L)
             }
-        }.also { handler.postDelayed(it, 1_000L) }
+        }.getOrDefault(emptyMap())
     }
 
-    private fun showIntroSkipPrompt(marker: IntroMarker) {
-        val endMs = marker.endMs ?: return
-        val dialog = android.app.AlertDialog.Builder(this)
-            .setTitle("Trecho detectado")
-            .setMessage("O TheIntroDB marcou uma ${marker.type.label}. Deseja pular este trecho?")
-            .setPositiveButton("Pular") { _, _ ->
-                player?.seekTo(endMs.coerceAtLeast(0L))
-                player?.playWhenReady = true
-            }
-            .setNegativeButton("Continuar", null)
-            .create()
-        introPrompt = dialog
-        dialog.setOnDismissListener { introPrompt = null }
-        dialog.show()
-    }
-
-    private fun parseEpisodeQueue(raw: String): List<QueuedEpisode> {
+    private fun parseCineHubEpisodeQueue(raw: String): List<Titulos.Ep> {
         if (raw.isBlank()) return emptyList()
         return runCatching {
             val array = JSONArray(raw)
-            val parsed = buildList {
-                // A hard input bound avoids iterating a malformed or unexpectedly huge Intent payload.
-                for (index in 0 until minOf(array.length(), EpisodeQueuePolicy.MAX_EPISODES * 4)) {
-                    val item = array.optJSONObject(index) ?: continue
-                    val urls = item.optJSONArray("sources") ?: continue
-                    val sources = buildList {
-                        for (i in 0 until minOf(urls.length(), EpisodeQueuePolicy.MAX_SOURCES_PER_EPISODE * 4)) {
-                            add(urls.optString(i))
+            buildList {
+                for (i in 0 until minOf(array.length(), 500)) {
+                    val item = array.optJSONObject(i) ?: continue
+                    val season = item.optInt("season", item.optInt("season_number", 0)).coerceAtLeast(0)
+                    val episode = item.optInt("episode", item.optInt("episode_number", 0)).coerceAtLeast(0)
+                    val sources = item.optJSONArray("sources") ?: continue
+                    if (season <= 0 || episode <= 0) continue
+                    val urls = buildList {
+                        for (j in 0 until minOf(sources.length(), 30)) {
+                            val url = sources.optString(j).trim()
+                            if (url.startsWith("https://", true) || url.startsWith("http://", true)) add(url)
                         }
-                    }
-                    add(QueuedEpisode(
-                        item.optString("title", "Próximo episódio"),
-                        item.optString("content_id", "episode-$index"),
-                        sources,
-                        item.optInt("tmdb_id", 0).coerceAtLeast(0),
-                        item.optInt("season", 0).coerceAtLeast(0),
-                        item.optInt("episode", 0).coerceAtLeast(0),
-                        item.optString("poster_url").takeIf(PlaybackUrlPolicy::isSafeHttpUrl).orEmpty(),
-                        item.optJSONArray("source_referers")?.let { refs ->
-                            (0 until refs.length()).map { refs.optString(it).takeIf(PlaybackUrlPolicy::isSafeHttpUrl).orEmpty() }
-                        }.orEmpty()
-                    ))
+                    }.distinct()
+                    if (urls.isNotEmpty()) add(Titulos.Ep(season, episode, mapOf("dub" to urls)))
                 }
             }
-            EpisodeQueuePolicy.normalize(parsed)
         }.getOrDefault(emptyList())
     }
 
-    private fun showSeasonQueuePicker() {
-        if (episodeQueue.isEmpty()) {
-            Toast.makeText(this, "Não há episódios disponíveis nesta fila.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val seasons = episodeQueue.map { it.season }.distinct().sorted()
-        if (seasons.isEmpty()) {
-            showEpisodeQueuePanel(null)
-            return
-        }
-        val labels = seasons.map { season ->
-            "Temporada $season · " + episodeQueue.count { it.season == season } + " episódios"
-        }.toTypedArray()
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Temporadas disponíveis")
-            .setItems(labels) { _, index ->
-                seasons.getOrNull(index)?.let { showEpisodeQueuePanel(it) }
-            }
-            .setNegativeButton("Fechar", null)
-            .show()
+    /** Começa o título/episódio atual do zero ou de onde parou. */
+    private fun comecar(pedirRetomada: Boolean, herdarFonte: Boolean = false, startTime: Long = 0L) {
+        val r = resolvido ?: return
+        val fontes = ep?.fontes ?: r.filme?.fontes ?: return
+        if (versao !in fontes.keys) versao = if (Preferencias.versao in fontes) Preferencias.versao
+                                              else fontes.keys.first()
+        opcoes = Titulos.ordem(fontes, versao)
+        tentadas.clear()
+        fonte = if (herdarFonte && r.serie && preferidaPosicao >= 0)
+            Titulos.preferida(opcoes, preferidaServidor, preferidaPosicao) else 0
+        marcas = null
+        legendasExt = emptyList()
+        legendaExt = null
+        legendaExtSrt = null
+        legendaAtraso = 0.0
+        trechoPulado = null
+        proximoDispensado = false
+        contagem = -1
+        proximo.visibility = View.GONE
+        pular.visibility = View.GONE
+        esconderAviso()
+        if (!r.reservado) Progresso.comecou(this, r.chave(ep), r.endereco, ep?.temporada ?: 0, ep?.numero ?: 0)
+        atualizarTitulos()
+        montarBotoes()
+        carregarMarcas()
+        carregarLegendas()
+
+        val retomar = if (startTime > 0) startTime * 1000L else if (pedirRetomada) Progresso.posicao(this, r.chave(ep)) else 0L
+        tocarFonte(inicio = retomar, pausado = (startTime <= 0 && retomar > 0))
+        if (startTime <= 0 && retomar > 0) perguntarRetomada(retomar)
     }
 
-    private fun showEpisodeQueuePanel(season: Int?) {
-        val entries = episodeQueue.mapIndexedNotNull { index, episode ->
-            if (season == null || episode.season == season) index to episode else null
-        }
-        if (entries.isEmpty()) {
-            Toast.makeText(this, "Nenhum episódio disponível nesta temporada.", Toast.LENGTH_SHORT).show()
+    private fun atualizarTitulos() {
+        val r = resolvido ?: return
+        val episodio = ep
+        if (episodio == null) {
+            subtitulo.text = Titulos.rotulo(versao)
             return
         }
-        val labels = entries.map { (_, episode) ->
-            "Episódio ${episode.episode}" +
-                if (episode.episode <= 0) " · ${episode.title}" else ""
-        }.toTypedArray()
-        android.app.AlertDialog.Builder(this)
-            .setTitle(if (season == null) "Episódios disponíveis" else "Temporada $season · Episódios")
-            .setItems(labels) { _, selected ->
-                val targetIndex = entries.getOrNull(selected)?.first ?: return@setItems
-                queueIndex = targetIndex
-                playQueuedEpisode()
-            }
-            .setNegativeButton("Voltar", if (season == null) null else { _, _ -> showSeasonQueuePicker() })
-            .show()
+        val nome = infoEpisodios[episodio.numero]?.nome?.takeIf { it.isNotBlank() }
+        subtitulo.text = listOfNotNull("T${episodio.temporada} E${episodio.numero}", nome,
+            Titulos.rotulo(versao)).joinToString(" · ")
     }
 
-    private fun showRadioStationPicker() {
-        CatalogClient.loadRadioPreview(80) { result ->
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                result.fold(
-                    onSuccess = { stations ->
-                        if (stations.isEmpty()) {
-                            Toast.makeText(this, "O acervo não retornou rádios com URL direta.", Toast.LENGTH_LONG).show()
-                            return@fold
-                        }
-                        val labels = stations.map { station ->
-                            station.name + station.genre.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()
-                        }.toTypedArray()
-                        android.app.AlertDialog.Builder(this)
-                            .setTitle("Trocar estação · CineHUB")
-                            .setItems(labels) { _, index ->
-                                val station = stations.getOrNull(index) ?: return@setItems
-                                sourceUrls = listOf(station.streamUrl)
-                                sourceReferers = emptyList()
-                                attempted.clear()
-                                currentIndex = 0
-                                contentId = station.id
-                                radioName = station.name
-                                radioGenre = station.genre
-                                radioExperience?.setStation(station.name, station.genre)
-                                playSource(0)
-                            }
-                            .setNegativeButton("Cancelar", null)
-                            .show()
-                    },
-                    onFailure = { error ->
-                        Toast.makeText(
-                            this,
-                            "Não foi possível carregar as rádios: " + (error.message ?: "erro desconhecido"),
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                )
+    private fun carregarMarcas() {
+        val r = resolvido ?: return
+        val episodio = ep
+        lifecycleScope.launch(semDerrubar) {
+            if (r.tmdbId > 0 && episodio != null && infoEpisodios.isEmpty()) {
+                infoEpisodios = Detalhes.temporada(r.tmdbId, episodio.temporada).associateBy { it.numero }
+                atualizarTitulos()
+            }
+            val achadas = Pulos.de(r.tmdbId, episodio?.temporada ?: 0, episodio?.numero ?: 0)
+            if (episodio == ep) marcas = achadas
+        }
+    }
+
+    // MARK: - Legendas do OpenSubtitles
+
+    private fun carregarLegendas() {
+        val r = resolvido ?: return
+        val episodio = ep
+        lifecycleScope.launch(semDerrubar) {
+            val lista = Legendas.de(r.tmdbId, r.serie, episodio?.temporada ?: 0, episodio?.numero ?: 0)
+            if (episodio != ep || lista.isEmpty()) return@launch
+            legendasExt = lista
+            // Quem já escolheu um idioma antes não precisa escolher de novo.
+            val idioma = Preferencias.legendaExterna
+            if (idioma.isNotBlank() && legendaExt == null) {
+                lista.firstOrNull { it.idioma == idioma }?.let { escolherLegendaExterna(it, guardar = false) }
             }
         }
     }
 
-    private fun handleVodPlaybackEnded() {
-        val exo = player
-        val duration = exo?.duration ?: C.TIME_UNSET
-        val position = exo?.currentPosition ?: 0L
-        val endedPrematurely = when {
-            duration != C.TIME_UNSET && duration > 0L -> position + 10_000L < duration
-            else -> position < 60_000L
-        }
-        if (endedPrematurely && currentIndex + 1 < sourceUrls.size) {
-            tryNextSource()
-            return
-        }
-        if (queueIndex < episodeQueue.size) showNextEpisodePrompt() else showMoreLikeThis()
+    /** O vídeo, com a legenda externa ao lado quando há uma escolhida. */
+    private fun fonteAtual(url: String): MediaSource {
+        val base = Playback.mediaSource(this, Source(url, referer = sourceReferers[url], userAgent = sourceUserAgents[url]))
+        val opcao = legendaExt ?: return base
+        val srt = legendaExtSrt ?: return base
+        // Salva o arquivo no cache para evitar limites de tamanho e bugs de parsing
+        // do DataSchemeDataSource do ExoPlayer com base64 gigantes.
+        val arquivo = java.io.File(cacheDir, "saimo_legenda.srt")
+        arquivo.writeText(Legendas.deslocar(srt, legendaAtraso), Charsets.UTF_8)
+        val formato = androidx.media3.common.Format.Builder()
+            .setId(Legendas.ID_FAIXA)
+            .setSampleMimeType(MimeTypes.APPLICATION_SUBRIP)
+            .setLanguage(opcao.bcp47)
+            .setLabel(opcao.rotulo)
+            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+            .build()
+        // O Media3 (desde a 1.4) quer a legenda já convertida em "cues" na
+        // leitura do arquivo; o SRT cru entregue num SingleSampleMediaSource
+        // derrubava o player ("Legacy decoding is disabled") e o filme ia para
+        // o servidor seguinte. O SubtitleExtractor faz essa conversão.
+        val leitor = DefaultSubtitleParserFactory()
+        val extratores = ExtractorsFactory { arrayOf(SubtitleExtractor(leitor.create(formato), formato)) }
+        val legenda = ProgressiveMediaSource.Factory(FileDataSource.Factory(), extratores)
+            .createMediaSource(MediaItem.fromUri(Uri.fromFile(arquivo)))
+        return MergingMediaSource(base, legenda)
     }
 
-    private fun showMoreLikeThis() {
-        if (catalogCategory.isBlank() || catalogGenres.isEmpty()) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Mais como este")
-                .setMessage("Este item ainda não tem gêneros suficientes no catálogo para montar recomendações.")
-                .setPositiveButton("Fechar player") { _, _ -> finish() }
-                .setNegativeButton("Continuar no player", null)
-                .show()
-            return
-        }
-        CatalogClient.loadRelatedPreview(
-            category = catalogCategory,
-            currentId = seriesId.ifBlank { catalogItemId.ifBlank { contentId } },
-            genres = catalogGenres,
-            limit = 8
-        ) { result ->
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                result.fold(
-                    onSuccess = { entries ->
-                        if (entries.isEmpty()) {
-                            android.app.AlertDialog.Builder(this)
-                                .setTitle("Mais como este")
-                                .setMessage("Não encontrei títulos relacionados nesta prévia do catálogo.")
-                                .setPositiveButton("Fechar player") { _, _ -> finish() }
-                                .setNegativeButton("Continuar no player", null)
-                                .show()
-                            return@fold
-                        }
-                        val labels = entries.map { entry ->
-                            buildString {
-                                append(entry.title)
-                                if (entry.year.isNotBlank()) append(" (").append(entry.year).append(')')
-                                if (entry.genres.isNotEmpty()) append(" · ").append(entry.genres.take(2).joinToString(" / "))
-                            }
-                        }.toTypedArray()
-                        android.app.AlertDialog.Builder(this)
-                            .setTitle("Mais como este · CineHUB")
-                            .setItems(labels) { _, index ->
-                                val entry = entries.getOrNull(index) ?: return@setItems
-                                val payload = JSONObject().apply {
-                                    put("id", entry.id)
-                                    put("title", entry.title)
-                                    put("type", entry.type)
-                                    put("detail_path", entry.detailPath)
-                                    put("poster_url", entry.posterPath)
-                                    put("year", entry.year)
-                                    put("subtype", entry.subtype)
-                                    put("genres", JSONArray(entry.genres))
-                                }
-                                startActivity(Intent(this, MainActivity::class.java).putExtra("open_detail_json", payload.toString()))
-                            }
-                            .setNeutralButton("Fechar player") { _, _ -> finish() }
-                            .setNegativeButton("Voltar", null)
-                            .show()
-                    },
-                    onFailure = { error ->
-                        android.app.AlertDialog.Builder(this)
-                            .setTitle("Mais como este")
-                            .setMessage("O catálogo não respondeu: " + (error.message ?: "erro desconhecido"))
-                            .setPositiveButton("OK", null)
-                            .show()
-                    }
-                )
+    /** O erro veio da legenda (leitura do SRT ou do renderizador de texto)? */
+    private fun erroDaLegenda(erro: PlaybackException): Boolean {
+        val formato = (erro as? androidx.media3.exoplayer.ExoPlaybackException)?.rendererFormat
+        if (formato != null && (MimeTypes.isText(formato.sampleMimeType) || formato.id == Legendas.ID_FAIXA)) return true
+        return generateSequence(erro as Throwable) { it.cause }.take(6).any { causa ->
+            causa.stackTrace.take(12).any { quadro ->
+                quadro.className.startsWith("androidx.media3.exoplayer.text.") ||
+                    quadro.className.startsWith("androidx.media3.extractor.text.")
             }
         }
     }
 
-    private fun loadPreviewPoster(target: ImageView, url: String) {
-        if (!PlaybackUrlPolicy.isSafeHttpUrl(url)) {
-            target.visibility = View.GONE
+    /** Refaz a fonte na posição de agora, sem a telemetria de "começou". */
+    private fun recarregarComLegenda() {
+        val p = player ?: return
+        val opcao = opcoes.getOrNull(fonte) ?: return
+        val posicao = p.currentPosition
+        val tocando = p.playWhenReady
+        selecionarLegendaExt = legendaExt != null
+        p.setMediaSource(fonteAtual(opcao.url), posicao)
+        p.playWhenReady = tocando
+        p.prepare()
+    }
+
+    private fun escolherLegendaExterna(opcao: Legendas.Opcao?, guardar: Boolean = true) {
+        if (opcao == null) {
+            if (legendaExt == null) return
+            legendaExt = null
+            legendaExtSrt = null
+            legendaAtraso = 0.0
+            recarregarComLegenda()
             return
         }
-        posterExecutor.execute {
-            val bitmap = runCatching {
-                val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 4_000
-                    readTimeout = 5_000
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "CineHUB-PLAYER/0.2")
-                }
-                try {
-                    if (connection.responseCode !in 200..299 ||
-                        (connection.contentLength > 0 && connection.contentLength > 2 * 1024 * 1024)
-                    ) {
-                        null
-                    } else {
-                        connection.inputStream.use { BitmapFactory.decodeStream(it) }
-                    }
-                } finally {
-                    connection.disconnect()
-                }
-            }.getOrNull()
-            if (bitmap != null) runOnUiThread {
-                if (!isFinishing && !isDestroyed) target.setImageBitmap(bitmap)
+        lifecycleScope.launch(semDerrubar) {
+            Toast.makeText(this@PlayerActivity, R.string.player_legenda_baixando, Toast.LENGTH_SHORT).show()
+            val srt = Legendas.baixar(opcao)
+            if (srt == null) {
+                Toast.makeText(this@PlayerActivity, R.string.player_legenda_falhou, Toast.LENGTH_LONG).show()
+                return@launch
             }
+            legendaExt = opcao
+            legendaExtSrt = srt
+            legendaAtraso = 0.0
+            video.subtitleView?.visibility = View.VISIBLE
+            estiloDaLegenda()
+            if (guardar) Preferencias.legendaExterna = opcao.idioma
+            recarregarComLegenda()
         }
     }
 
-    private fun showNextEpisodePrompt() {
-        if (nextPromptShown || queueIndex >= episodeQueue.size) return
-        nextPromptShown = true
-        val next = episodeQueue[queueIndex]
-        val panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(28, 8, 28, 8)
-        }
-        val poster = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(Color.rgb(28, 28, 32))
-            contentDescription = "Capa de ${next.title}"
-        }
-        val posterWidth = (128 * resources.displayMetrics.density).toInt()
-        val posterHeight = (184 * resources.displayMetrics.density).toInt()
-        panel.addView(poster, LinearLayout.LayoutParams(posterWidth, posterHeight).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = (12 * resources.displayMetrics.density).toInt()
-        })
-        loadPreviewPoster(poster, next.posterUrl)
-        panel.addView(android.widget.TextView(this).apply {
-            text = next.title
-            textSize = 22f
-            setTextColor(Color.WHITE)
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            maxLines = 2
-        })
-        panel.addView(android.widget.TextView(this).apply {
-            text = if (next.season > 0 && next.episode > 0) {
-                "Temporada ${next.season} · Episódio ${next.episode}"
-            } else {
-                "Próximo item da fila"
-            }
-            textSize = 15f
-            setTextColor(Color.LTGRAY)
-            setPadding(0, 10, 0, 8)
-        })
-        val countdownText = android.widget.TextView(this).apply {
-            text = "Reprodução automática em 10 segundos"
-            textSize = 16f
-            setTextColor(Color.rgb(255, 90, 98))
-            setPadding(0, 8, 0, 8)
-            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-        }
-        panel.addView(countdownText)
-        val dialog = android.app.AlertDialog.Builder(this)
-            .setTitle("Continuar assistindo")
-            .setView(panel)
-            .setPositiveButton("Reproduzir agora") { _, _ -> playQueuedEpisode() }
-            .setNegativeButton("Parar") { _, _ -> cancelNextEpisodeCountdown() }
-            .create()
-        nextEpisodeDialog = dialog
-        dialog.setOnCancelListener { cancelNextEpisodeCountdown() }
-        dialog.setOnDismissListener {
-            if (nextEpisodeDialog === dialog) {
-                nextEpisodeRunnable?.let(handler::removeCallbacks)
-                nextEpisodeRunnable = null
-                nextEpisodeDialog = null
-            }
-        }
-        dialog.show()
-        var secondsLeft = 10
-        nextEpisodeRunnable = object : Runnable {
-            override fun run() {
-                if (isFinishing || nextEpisodeDialog?.isShowing != true) return
-                secondsLeft -= 1
-                if (secondsLeft <= 0) {
-                    dialog.dismiss()
-                    playQueuedEpisode()
-                } else {
-                    countdownText.text = "Reprodução automática em ${secondsLeft} segundo(s)"
-                    handler.postDelayed(this, 1_000L)
-                }
-            }
-        }.also { handler.postDelayed(it, 1_000L) }
+    private fun ajustarAtrasoDaLegenda(segundos: Double) {
+        if (legendaExt == null) return
+        legendaAtraso = segundos
+        recarregarComLegenda()
     }
 
-    private fun cancelNextEpisodeCountdown() {
-        nextEpisodeRunnable?.let(handler::removeCallbacks)
-        nextEpisodeRunnable = null
-        nextEpisodeDialog = null
+    // MARK: - Reprodução
+
+    private fun novoPlayer(): ExoPlayer {
+        val novo = ExoPlayer.Builder(this)
+            .setLoadControl(bufferDoFilme())
+            .setRenderersFactory(DefaultRenderersFactory(this).setEnableDecoderFallback(true))
+            .setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA).setContentType(if (isRadioStream) C.AUDIO_CONTENT_TYPE_MUSIC else C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+        novo.addListener(ouvinte)
+        novo.playbackParameters = PlaybackParameters(velocidade, 1.0f)
+        Telemetria.observar(novo)
+        if (Preferencias.economia || reduziu) limitarQualidade(novo)
+        aplicarLegendaPreferida(novo)
+        return novo
     }
 
-    private fun playQueuedEpisode() {
-        cancelNextEpisodeCountdown()
-        if (queueIndex !in episodeQueue.indices) return
-        val next = episodeQueue[queueIndex++]
-        contentId = next.contentId
-        // Subtitle URLs from a previous episode can point to a different timeline.
-        val previousSubtitleFile = internalSubtitleFile
-        internalSubtitleFile = null
-        originalSubtitleUrl = null
-        subtitleUrl = null
-        subtitleDelayMs = 0L
-        subtitleMimeTypeOverride = null
-        tmdbId = next.tmdbId
-        seasonNumber = next.season
-        episodeNumber = next.episode
-        loadIntroMarkers()
-        val preferredHost = if (seriesId.isNotBlank()) {
-            getSharedPreferences("player-settings", MODE_PRIVATE)
-                .getString("preferred_source_host_$seriesId", null)
-        } else null
-        val sourcePairs = next.sources.mapIndexed { index, url ->
-            url to next.sourceReferers.getOrNull(index).orEmpty()
-        }
-        val orderedPairs = if (preferredHost.isNullOrBlank()) sourcePairs else sourcePairs.sortedBy { (url, _) ->
-            if (runCatching { Uri.parse(url).host }.getOrNull().equals(preferredHost, ignoreCase = true)) 0 else 1
-        }
-        sourceUrls = orderedPairs.map { it.first }
-        sourceReferers = orderedPairs.map { it.second }
-        attempted.clear()
-        currentIndex = 0
-        nextPromptShown = false
-        failureDialogShown = false
-        playSource(0)
-        previousSubtitleFile?.delete()
-    }
-
-    private fun showTrackMenu() {
-        val exo = player ?: return
-        val options = listOf(
-            Triple("Áudio", C.TRACK_TYPE_AUDIO, false),
-            Triple("Legendas", C.TRACK_TYPE_TEXT, false)
-        ).filter { (_, type, _) -> exo.currentTracks.groups.any { it.type == type && it.length > 0 } }
-        if (options.isEmpty()) {
-            Toast.makeText(this, "Não há faixas alternativas disponíveis nesta fonte.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Faixas de reprodução")
-            .setItems(options.map { it.first }.toTypedArray()) { _, index ->
-                val (title, type, adaptive) = options[index]
-                TrackSelectionDialogBuilder(this, title, exo, type)
-                    .setAllowAdaptiveSelections(adaptive)
-                    .setShowDisableOption(type == C.TRACK_TYPE_TEXT)
-                    .build()
-                    .show()
-            }
-            .show()
-    }
-
-    private fun cycleSpeed() {
-        if (isLive) {
-            Toast.makeText(this, "Velocidade indisponível para transmissão ao vivo.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        speedIndex = (speedIndex + 1) % speeds.size
-        val speed = speeds[speedIndex]
-        player?.setPlaybackParameters(PlaybackParameters(speed))
-        speedButton.text = "Velocidade " + speed + "×"
-    }
-
-    private fun playSource(index: Int) {
-        if (index !in sourceUrls.indices) {
-            showPlaybackFailureDialog()
-            return
-        }
-        currentIndex = index
-        if (isRadio) radioExperience?.setPlaybackState(false, isBuffering = true)
-        val url = sourceUrls[index]
-        if (!PlaybackUrlPolicy.isSafeHttpUrl(url)) {
-            tryNextSource()
-            return
-        }
-        if (!attempted.add(url)) {
-            tryNextSource()
-            return
-        }
-        val requestToken = ++sourceRequestToken
-
-        if (ProviderUrlResolver.isResolvableProviderPage(url)) {
-            // Resolve provider pages off the main thread. Keep a timeout active
-            // during resolution so a slow embed cannot block source failover.
-            player?.stop()
-            player?.clearMediaItems()
-            startupCheck?.let(handler::removeCallbacks)
-            startupCheck = Runnable {
-                if (player?.playbackState != Player.STATE_READY &&
-                    player?.playbackState != Player.STATE_ENDED) tryNextSource()
-            }.also { handler.postDelayed(it, startupTimeoutMs) }
-            providerResolverExecutor.execute {
-                val resolved = resolveProviderPage(url)
-                runOnUiThread {
-                    if (isFinishing || isDestroyed || currentIndex != index ||
-                        sourceRequestToken != requestToken || url !in attempted
-                    ) return@runOnUiThread
-                    startSourcePlayback(
-                        playbackUrl = resolved.url,
-                        resolvedReferer = resolved.referer,
-                        resolvedMimeType = resolved.mimeType
-                    )
-                }
-            }
+    /**
+     * Quanto do filme guardar adiantado. O padrão do ExoPlayer não tem teto em
+     * bytes: num TV Box de 1 GB o filme em 1080p chegou a 75 MB de heap e
+     * deixou 47 MB livres para o sistema, que matava o app. Lá ficam 15 a
+     * 30 s e 32 MB; nos outros, até 50 s e 96 MB — folga de sobra para rede
+     * ruim sem crescer sem fim.
+     */
+    private fun bufferDoFilme(): DefaultLoadControl =
+        if (Aparelho.poucaMemoria || Preferencias.economia) {
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 30_000, 2_500, 5_000)
+                .setTargetBufferBytes(32 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(false)
+                .build()
         } else {
-            startSourcePlayback(playbackUrl = url)
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(30_000, 50_000, 2_500, 5_000)
+                .setTargetBufferBytes(96 * 1024 * 1024)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
         }
+
+    private fun tocarFonte(inicio: Long, pausado: Boolean = false) {
+        val opcao = opcoes.getOrNull(fonte) ?: run { desistir(); return }
+        if (ep != null) {
+            preferidaServidor = Titulos.servidor(opcao.url)
+            preferidaPosicao = opcoes.filter { it.versao == opcao.versao }.indexOf(opcao)
+        }
+        val atual = player ?: novoPlayer().also {
+            player = it
+            video.player = it
+            criarSessao(it)
+        }
+        tocou = false
+        retomadas = 0
+        tentativaDesde = SystemClock.elapsedRealtime()
+        mostrarCarregando(if (tentadas.isEmpty()) getString(R.string.player_abrindo)
+                          else getString(R.string.player_outro_servidor))
+        radioExperience?.setPlaybackState(false, isBuffering = true)
+        Telemetria.comecou("vod", nomeTelemetria(), opcao.url, fonte + 1, nova = tentadas.isEmpty())
+        selecionarLegendaExt = legendaExt != null
+        atual.setMediaSource(fonteAtual(opcao.url))
+        if (inicio > 0) atual.seekTo(inicio)
+        atual.playWhenReady = !pausado
+        atual.prepare()
+        handler.removeCallbacks(prazo)
+        handler.postDelayed(prazo, PRAZO_MS)
+        resolucao.visibility = View.GONE
     }
 
-    private fun startSourcePlayback(
-        playbackUrl: String,
-        resolvedReferer: String? = null,
-        resolvedMimeType: String? = null
-    ) {
-        startupCheck?.let(handler::removeCallbacks)
-        startupCheck = null
-        val declaredReferer = sourceReferers.getOrNull(currentIndex).orEmpty()
-            .ifBlank { resolvedReferer.orEmpty() }
-        player?.apply {
-            stop()
-            clearMediaItems()
-            setMediaSource(createMediaSource(playbackUrl, resolvedMimeType, declaredReferer))
-            prepare()
-            playWhenReady = true
-        }
-        startupCheck = Runnable {
-            if (player?.playbackState != Player.STATE_READY &&
-                player?.playbackState != Player.STATE_ENDED) tryNextSource()
-        }.also { handler.postDelayed(it, startupTimeoutMs) }
+    private fun nomeTelemetria(): String {
+        val episodio = ep ?: return alvo.titulo
+        return "${alvo.titulo} T${episodio.temporada}E${episodio.numero}"
     }
 
-    private data class ProviderPageResponse(val body: String, val finalUrl: String)
+    /** Fonte que não abriu no prazo: vai para a seguinte. */
+    private val prazo = Runnable {
+        val p = player ?: return@Runnable
+        if (tocou || p.playbackState == Player.STATE_READY) return@Runnable
+        Telemetria.falhou("vod", nomeTelemetria(), opcoes.getOrNull(fonte)?.url.orEmpty(), fonte + 1,
+            "sem imagem em ${PRAZO_MS / 1000} s")
+        proximaFonte(p.currentPosition)
+    }
 
-    private fun resolveProviderPage(pageUrl: String): ProviderUrlResolver.ResolvedSource {
-        if (pageUrl.contains("dadinhodetapioca.fun/play/", ignoreCase = true)) {
-            val direct = resolveDadinhoUrl(pageUrl)
-            return ProviderUrlResolver.ResolvedSource(direct, "https://dadinhodetapioca.fun/")
+    private fun proximaFonte(posicao: Long) {
+        tentadas += fonte
+        fonte = opcoes.indices.firstOrNull { it !in tentadas } ?: run { desistir(); return }
+        (botoes.findViewWithTag<TextView>("fonte"))?.let { b ->
+            b.text = getString(R.string.player_fonte_n, fonte + 1)
+            Icones.inicio(b, R.drawable.ic_swap)
         }
-        val now = System.currentTimeMillis()
-        resolvedEmbedProviderUrls[pageUrl]?.let { (savedAt, result) ->
-            if (now - savedAt < 10 * 60 * 1000L) return result
+        tocarFonte(if (isLiveStream || isRadioStream) 0L else posicao, pausado = aviso.visibility == View.VISIBLE)
+    }
+
+    private fun desistir() {
+        handler.removeCallbacks(prazo)
+        Telemetria.caiu("vod", nomeTelemetria(), opcoes.size)
+        player?.stop()
+        val texto = if (resolvido?.serie == true) getString(R.string.player_erro_texto_serie)
+                    else getString(R.string.player_erro_texto)
+        mostrarErro(getString(R.string.player_erro_titulo), texto)
+    }
+
+    private val ouvinte = object : Player.Listener {
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            val rotulo = rotuloResolucao(videoSize.width, videoSize.height).substringAfter(" · ")
+            resolucao.text = rotulo
+            resolucao.visibility = if (rotulo.isBlank()) View.GONE else View.VISIBLE
         }
-        val pageHost = runCatching { URL(pageUrl).host.lowercase() }.getOrDefault("")
-        val rootReferer = if (pageHost.contains("mgeb.top")) "https://mgeb.top/" else "https://nhdapi.com/"
-        val queue = java.util.ArrayDeque<Pair<String, String>>()
-        ProviderUrlResolver.candidatePages(pageUrl).forEach { queue.addLast(it to rootReferer) }
-        val visited = linkedSetOf<String>()
 
-        while (queue.isNotEmpty() && visited.size < 12) {
-            val (candidate, referer) = queue.removeFirst()
-            if (!PlaybackUrlPolicy.isSafeHttpUrl(candidate) || !visited.add(candidate)) continue
-            val response = fetchProviderPage(candidate, referer, "text/html,*/*") ?: continue
-            val finalUrl = response.finalUrl
-            val finalHost = runCatching { URL(finalUrl).host.lowercase() }.getOrDefault("")
-
-            if (finalHost == "nhdapi.com" || finalHost.endsWith(".nhdapi.com")) {
-                val config = ProviderUrlResolver.parseNhdApiConfig(response.body, finalUrl)
-                if (config != null) {
-                    ProviderUrlResolver.nhdApiEndpoints(config).take(11).forEach { endpoint ->
-                        val endpointHost = runCatching { URL(endpoint).host.lowercase() }.getOrDefault("")
-                        if (endpointHost != "nhdapi.com" && !endpointHost.endsWith(".nhdapi.com")) return@forEach
-                        val apiResponse = fetchProviderPage(endpoint, finalUrl, "application/json") ?: return@forEach
-                        val direct = ProviderUrlResolver.extractNhdPlayUrl(apiResponse.body, finalUrl) ?: return@forEach
-                        val kind = Regex("""(?i)"kind"\s*:\s*"([^"]+)""")
-                            .find(apiResponse.body)?.groupValues?.getOrNull(1)?.lowercase().orEmpty()
-                        val mimeType = when {
-                            kind.contains("hls") || kind.contains("m3u8") -> MimeTypes.APPLICATION_M3U8
-                            kind.contains("dash") || kind.contains("mpd") -> MimeTypes.APPLICATION_MPD
-                            kind.contains("mp4") || kind.contains("progressive") -> MimeTypes.VIDEO_MP4
-                            else -> null
-                        }
-                        val resolved = ProviderUrlResolver.ResolvedSource(direct, finalUrl, mimeType)
-                        resolvedEmbedProviderUrls[pageUrl] = System.currentTimeMillis() to resolved
-                        return resolved
+        override fun onPlaybackStateChanged(state: Int) {
+            val p = player ?: return
+            radioExperience?.setPlaybackState(p.isPlaying, isBuffering = state == Player.STATE_BUFFERING)
+            when (state) {
+                Player.STATE_READY -> {
+                    handler.removeCallbacks(prazo)
+                    esconderCarregando()
+                    if (travouDesde > 0 && SystemClock.elapsedRealtime() - travouDesde > 5_000) travadas++
+                    travouDesde = 0
+                    if (travadas >= 2 && !reduziu && !Preferencias.economia) reduzirQualidade()
+                    if (!tocou) {
+                        tocou = true
+                        Telemetria.tocou("vod", nomeTelemetria(), opcoes.getOrNull(fonte)?.url.orEmpty(),
+                            fonte + 1, SystemClock.elapsedRealtime() - tentativaDesde)
+                        if (base.visibility != View.VISIBLE && aviso.visibility != View.VISIBLE) mostrarControles()
                     }
                 }
-            }
-
-            val mediaUrl = ProviderUrlResolver.extractMediaUrls(response.body, finalUrl).firstOrNull()
-            if (mediaUrl != null) {
-                val resolved = ProviderUrlResolver.ResolvedSource(mediaUrl, finalUrl)
-                resolvedEmbedProviderUrls[pageUrl] = System.currentTimeMillis() to resolved
-                return resolved
-            }
-
-            ProviderUrlResolver.extractIframeUrls(response.body, finalUrl).forEach { nested ->
-                val nestedHost = runCatching { URL(nested).host.lowercase() }.getOrDefault("")
-                val nestedPath = runCatching { URL(nested).path.lowercase() }.getOrDefault("")
-                val nestedLower = nested.lowercase()
-                val nestedIsMedia = Regex("""(?i)\.(?:m3u8|mpd|mp4|mkv|webm|avi|mov|m4v|ts)(?:$|[?#&])""")
-                    .containsMatchIn(nestedLower) ||
-                    nestedLower.contains("playlist") || nestedLower.contains("manifest") ||
-                    ((nestedHost == "embedplayer2.xyz" || nestedHost.endsWith(".embedplayer2.xyz")) &&
-                        nestedPath.contains("/cdn/hls/"))
-                if (nestedIsMedia) {
-                    val resolved = ProviderUrlResolver.ResolvedSource(nested, finalUrl)
-                    resolvedEmbedProviderUrls[pageUrl] = System.currentTimeMillis() to resolved
-                    return resolved
+                Player.STATE_BUFFERING -> if (tocou) {
+                    travouDesde = SystemClock.elapsedRealtime()
+                    mostrarCarregando(getString(R.string.player_carregando))
                 }
-                if (ProviderUrlResolver.isResolvableProviderPage(nested)) {
-                    ProviderUrlResolver.candidatePages(nested).forEach { queue.addLast(it to finalUrl) }
-                }
-            }
-        }
-        return ProviderUrlResolver.ResolvedSource(pageUrl, rootReferer)
-    }
-
-    private fun fetchProviderPage(
-        pageUrl: String,
-        referer: String,
-        accept: String
-    ): ProviderPageResponse? {
-        val connection = runCatching {
-            (URL(pageUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 5_000
-                readTimeout = 7_000
-                requestMethod = "GET"
-                setRequestProperty("Accept", accept)
-                setRequestProperty("Referer", referer)
-                setRequestProperty(
-                    "User-Agent",
-                    "Mozilla/5.0 (Linux; Android 11; Android TV) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CineHUB-PLAYER/0.2"
-                )
-            }
-        }.getOrNull() ?: return null
-        return try {
-            if (connection.responseCode !in 200..299 ||
-                (connection.contentLength > 0 && connection.contentLength > 2 * 1024 * 1024)
-            ) return null
-            val output = ByteArrayOutputStream()
-            connection.inputStream.use { input ->
-                val buffer = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    total += count
-                    if (total > 2 * 1024 * 1024) return null
-                    output.write(buffer, 0, count)
-                }
-            }
-            ProviderPageResponse(
-                body = output.toString("UTF-8"),
-                finalUrl = connection.url?.toString()?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl) ?: pageUrl
-            )
-        } catch (_: Exception) {
-            null
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun resolveDadinhoUrl(pageUrl: String): String {
-        val now = System.currentTimeMillis()
-        resolvedProviderUrls[pageUrl]?.let { (savedAt, resolved) ->
-            if (now - savedAt < 90 * 60 * 1000L) return resolved
-        }
-        return runCatching {
-            val connection = (URL(pageUrl).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 5_000
-                readTimeout = 7_000
-                requestMethod = "GET"
-                setRequestProperty("Referer", "https://rdcanais.org/")
-                setRequestProperty(
-                    "User-Agent",
-                    "Mozilla/5.0 (Linux; Android 11; Android TV) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CineHUB-PLAYER/0.2"
-                )
-            }
-            val html = try {
-                if (connection.responseCode !in 200..299) return@runCatching pageUrl
-                val output = ByteArrayOutputStream()
-                connection.inputStream.use { input ->
-                    val buffer = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        if (total > 1_000_000) break
-                        output.write(buffer, 0, count)
+                Player.STATE_ENDED -> {
+                    if (isLiveStream || isRadioStream) {
+                        proximaFonte(0L)
+                        return
+                    }
+                    // "Acabou" antes de meio minuto não é fim de filme: é
+                    // servidor que devolveu arquivo vazio ou cortado. Vai
+                    // para o próximo em vez de fechar o player.
+                    val duracao = p.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: 0L
+                    if (p.currentPosition < 30_000 || duracao in 1 until 120_000) {
+                        Telemetria.falhou("vod", nomeTelemetria(), opcoes.getOrNull(fonte)?.url.orEmpty(),
+                            fonte + 1, "terminou em ${p.currentPosition / 1000} s")
+                        proximaFonte(0)
+                    } else {
+                        terminou()
                     }
                 }
-                output.toString("UTF-8")
-            } finally {
-                connection.disconnect()
+                else -> Unit
             }
-            val resolved = ProviderUrlResolver.extractDadinhoStreamUrl(html) ?: return@runCatching pageUrl
-            resolvedProviderUrls[pageUrl] = System.currentTimeMillis() to resolved
-            resolved
-        }.getOrDefault(pageUrl)
-    }
-
-    private fun createMediaSource(
-        url: String,
-        mimeTypeOverride: String? = null,
-        refererOverride: String? = null
-    ): MediaSource {
-        val referer = refererOverride?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl)
-            ?: sourceReferers.getOrNull(currentIndex)?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl)
-        val source = SaimoSource(
-            url = url,
-            referer = referer,
-            userAgent = "Mozilla/5.0 (Linux; Android 11; Android TV) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 CineHUB-TV"
-        )
-        val networkFactory = SaimoPlayback.dataSourceFactory(source)
-        val localAwareFactory = DefaultDataSource.Factory(this, networkFactory)
-        return DefaultMediaSourceFactory(this)
-            .setDataSourceFactory(localAwareFactory)
-            .createMediaSource(buildMediaItem(url, mimeTypeOverride))
-    }
-
-    private fun buildMediaItem(url: String, mimeTypeOverride: String? = null): MediaItem {
-        val itemBuilder = MediaItem.Builder().setUri(Uri.parse(url))
-        val parsedUri = Uri.parse(url)
-        val lowerUrl = url.substringBefore('#').lowercase()
-        val nestedUrl = runCatching { parsedUri.getQueryParameter("url").orEmpty().lowercase() }
-            .getOrDefault("")
-        // SaimoTV's Android resolver identifies this provider as HLS even though
-        // its master playlist is exposed as master.txt instead of .m3u8.
-        val isEmbedPlayerHls = parsedUri.host.orEmpty().equals("embedplayer2.xyz", ignoreCase = true) &&
-            parsedUri.path.orEmpty().contains("/cdn/hls/", ignoreCase = true)
-        val isTextHlsManifest = parsedUri.path.orEmpty().endsWith(".txt", ignoreCase = true)
-        val inferredMime = mimeTypeOverride ?: when {
-            lowerUrl.contains(".m3u8") || nestedUrl.contains(".m3u8") || isEmbedPlayerHls || isTextHlsManifest -> MimeTypes.APPLICATION_M3U8
-            lowerUrl.contains(".mpd") || nestedUrl.contains(".mpd") -> MimeTypes.APPLICATION_MPD
-            lowerUrl.substringBefore('?').endsWith(".mp4") -> MimeTypes.VIDEO_MP4
-            else -> null
+            if (p.isPlaying) retomadas = 0
         }
-        if (inferredMime != null) itemBuilder.setMimeType(inferredMime)
-        subtitleUrl?.takeIf(::isAllowedSubtitleLocation)?.let { subtitle ->
-            val lower = subtitle.substringBefore('?').substringBefore('#').lowercase()
-            val mime = subtitleMimeTypeOverride ?: when {
-                lower.endsWith(".srt") -> "application/x-subrip"
-                lower.endsWith(".vtt") -> "text/vtt"
-                lower.endsWith(".ssa") || lower.endsWith(".ass") -> "text/x-ssa"
-                else -> "text/vtt"
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            radioExperience?.setPlaybackState(isPlaying, isBuffering = player?.playbackState == Player.STATE_BUFFERING)
+            video.keepScreenOn = isPlaying
+            atualizarBotaoPausa()
+            if (!isPlaying) guardar()
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            radioExperience?.setPlaybackState(false, errorMessage = "Falha na fonte; tentando outra…")
+            val p = player ?: return
+            handler.removeCallbacks(prazo)
+            // Legenda com defeito não é fonte morta: sai a legenda, o filme
+            // continua no mesmo servidor e no mesmo ponto.
+            if (legendaExt != null && erroDaLegenda(error)) {
+                legendaExt = null
+                legendaExtSrt = null
+                legendaAtraso = 0.0
+                Toast.makeText(this@PlayerActivity, R.string.player_legenda_falhou, Toast.LENGTH_LONG).show()
+                recarregarComLegenda()
+                return
             }
-            itemBuilder.setSubtitleConfigurations(
-                listOf(
-                    MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitle))
-                        .setMimeType(mime)
-                        .setLanguage("pt")
-                        .setSelectionFlags(0)
-                        .build()
-                )
-            )
-        }
-        return itemBuilder.build()
-    }
-
-    private fun showSubtitleStyleOptions() {
-        val choices = arrayOf(
-            "Tamanho pequeno · 18 sp",
-            "Tamanho padrão · 22 sp",
-            "Tamanho grande · 28 sp",
-            "Fundo da legenda: ${if (subtitleBackground) "ligado" else "desligado"}"
-        )
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Aparência das legendas")
-            .setItems(choices) { _, index ->
-                when (index) {
-                    0 -> subtitleSizeSp = 18f
-                    1 -> subtitleSizeSp = 22f
-                    2 -> subtitleSizeSp = 28f
-                    3 -> subtitleBackground = !subtitleBackground
-                }
-                applySubtitleStyle()
-                Toast.makeText(
-                    this,
-                    "Legenda: ${subtitleSizeSp.toInt()} sp · fundo ${if (subtitleBackground) "ligado" else "desligado"}",
-                    Toast.LENGTH_SHORT
-                ).show()
+            Telemetria.falhou("vod", nomeTelemetria(), opcoes.getOrNull(fonte)?.url.orEmpty(),
+                fonte + 1, error.errorCodeName)
+            // Já tocava: é tropeço da origem, não fonte morta. Pede de novo o
+            // mesmo pedaço antes de trocar de servidor — trocar recomeça noutro
+            // ponto, às vezes com outro áudio.
+            if (tocou && retomadas < 3) {
+                retomadas++
+                mostrarCarregando(getString(R.string.player_reconectando))
+                val ponto = p.currentPosition
+                p.seekTo(ponto)
+                p.prepare()
+                p.playWhenReady = true
+                handler.postDelayed(prazo, PRAZO_MS)
+                return
             }
-            .setNegativeButton("Fechar", null)
-            .show()
-    }
-
-    private fun applySubtitleStyle() {
-        playerView.subtitleView?.apply {
-            setFixedTextSize(TypedValue.COMPLEX_UNIT_SP, subtitleSizeSp)
-            setStyle(
-                CaptionStyleCompat(
-                    Color.WHITE,
-                    if (subtitleBackground) Color.argb(190, 0, 0, 0) else Color.TRANSPARENT,
-                    Color.TRANSPARENT,
-                    CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                    Color.BLACK,
-                    null
-                )
-            )
+            proximaFonte(p.currentPosition)
         }
-    }
 
-    private fun isAllowedSubtitleLocation(candidate: String): Boolean {
-        if (PlaybackUrlPolicy.isSafeHttpUrl(candidate)) return true
-        val file = internalSubtitleFile ?: return false
-        val uri = runCatching { Uri.parse(candidate) }.getOrNull() ?: return false
-        return uri.scheme == "file" && uri.path == file.absolutePath
-    }
-
-    private fun showSubtitleSyncOptions() {
-        val source = originalSubtitleUrl ?: subtitleUrl?.takeIf(PlaybackUrlPolicy::isSafeHttpUrl)
-        if (source.isNullOrBlank()) {
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Sincronizar legenda")
-                .setMessage("Escolha uma legenda externa primeiro. A sincronização ajusta arquivos SRT/VTT sem alterar o vídeo.")
-                .setPositiveButton("Adicionar legenda") { _, _ -> promptExternalSubtitle() }
-                .setNegativeButton("Fechar", null)
-                .show()
-            return
-        }
-        val choices = arrayOf(
-            "−5 segundos · mais cedo",
-            "−2 segundos · mais cedo",
-            "Sincronização original · 0 s",
-            "+2 segundos · mais tarde",
-            "+5 segundos · mais tarde"
-        )
-        val offsets = longArrayOf(-5_000L, -2_000L, 0L, 2_000L, 5_000L)
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Sincronização da legenda · ${if (subtitleDelayMs > 0) "+" else ""}${subtitleDelayMs / 1_000}s")
-            .setItems(choices) { _, index ->
-                val offset = offsets.getOrElse(index) { 0L }
-                if (offset == 0L) {
-                    subtitleDelayMs = 0L
-                    val previousFile = internalSubtitleFile
-                    internalSubtitleFile = null
-                    subtitleUrl = source
-                    reloadCurrentMediaItemWithSubtitle()
-                    previousFile?.delete()
-                } else {
-                    applySubtitleDelay(source, offset)
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun applySubtitleDelay(source: String, offsetMs: Long) {
-        originalSubtitleUrl = source
-        val requestedContentId = contentId
-        Toast.makeText(this, "Ajustando sincronização da legenda…", Toast.LENGTH_SHORT).show()
-        subtitleExecutor.execute {
-            val result = runCatching {
-                val connection = (URL(source).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 5_000
-                    readTimeout = 7_000
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "CineHUB-PLAYER/0.2")
-                }
-                val rawText = try {
-                    if (connection.responseCode !in 200..299 ||
-                        (connection.contentLength > 0 && connection.contentLength > 4 * 1024 * 1024)
-                    ) error("Arquivo de legenda inválido ou maior que 4 MB")
-                    val output = ByteArrayOutputStream()
-                    connection.inputStream.use { input ->
-                        val buffer = ByteArray(8 * 1024)
-                        var total = 0
-                        while (true) {
-                            val count = input.read(buffer)
-                            if (count < 0) break
-                            total += count
-                            if (total > 4 * 1024 * 1024) error("Arquivo de legenda maior que 4 MB")
-                            output.write(buffer, 0, count)
-                        }
+        override fun onTracksChanged(tracks: Tracks) {
+            if (selecionarLegendaExt) {
+                // A faixa da legenda escolhida só existe depois de o player
+                // preparar; é aqui que ela é ligada.
+                val grupo = tracks.groups.firstOrNull { g ->
+                    g.type == C.TRACK_TYPE_TEXT && (0 until g.length).any { i ->
+                        val formato = g.getTrackFormat(i)
+                        formato.id == Legendas.ID_FAIXA ||
+                            formato.label == legendaExt?.rotulo ||
+                            formato.language == legendaExt?.bcp47
                     }
-                    output.toString("UTF-8")
-                } finally {
-                    connection.disconnect()
                 }
-                val shifted = SubtitleSyncPolicy.shiftTimestamps(rawText, offsetMs)
-                if (shifted == rawText) error("Não encontrei timestamps SRT/VTT para ajustar")
-                val extension = if (
-                    subtitleMimeTypeOverride == "application/x-subrip" ||
-                    source.substringBefore('?').lowercase().endsWith(".srt")
-                ) "srt" else "vtt"
-                val file = File(cacheDir, "cinehub-subtitle-${requestedContentId.hashCode()}-${offsetMs}.${extension}")
-                FileOutputStream(file).use { it.write(shifted.toByteArray(Charsets.UTF_8)) }
-                file
+                val p = player
+                if (grupo != null && p != null) {
+                    selecionarLegendaExt = false
+                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setOverrideForType(TrackSelectionOverride(grupo.mediaTrackGroup, 0)).build()
+                    video.subtitleView?.visibility = View.VISIBLE
+                    estiloDaLegenda()
+                }
             }
-            runOnUiThread {
-                if (isFinishing || isDestroyed || contentId != requestedContentId) {
-                    result.getOrNull()?.delete()
-                    return@runOnUiThread
+            montarBotoes()
+        }
+    }
+
+    // MARK: - Relógio: tempo, pulos, próximo episódio
+
+    private val tique = object : Runnable {
+        override fun run() {
+            relogio.text = hora.format(Date())
+            atualizarTempo()
+            conferirTrechos()
+            handler.postDelayed(this, 500)
+        }
+    }
+
+    private var ultimoGuardado = 0L
+
+    private fun atualizarTempo() {
+        val p = player ?: return
+        val duracao = p.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: 0L
+        val posicao = alvoDoPulo ?: p.currentPosition
+        if (duracao > 0) {
+            barra.progress = (posicao * 1000 / duracao).toInt()
+            barra.secondaryProgress = (p.bufferedPosition * 1000 / duracao).toInt()
+            total.text = "-" + tempo(duracao - posicao)
+        } else {
+            total.text = ""
+        }
+        agora.text = tempo(posicao)
+        val relogioAgora = SystemClock.elapsedRealtime()
+        // A cada 30 s: a pausa e a saída da tela já guardam o ponto exato, e
+        // cada gravação reescreve o arquivo de progresso inteiro.
+        if (p.isPlaying && relogioAgora - ultimoGuardado > 30_000) {
+            ultimoGuardado = relogioAgora
+            guardar()
+        }
+    }
+
+    private fun conferirTrechos() {
+        val p = player ?: return
+        if (!tocou || aviso.visibility == View.VISIBLE) return
+        val duracao = p.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: return
+        val posicao = p.currentPosition
+
+        val trecho = marcas?.em(posicao, duracao)
+        if (trecho != null && trecho != trechoPulado) {
+            if (Preferencias.pularAutomatico) {
+                pularTrecho(trecho)
+            } else if (pular.visibility != View.VISIBLE) {
+                pular.text = getString(when (trecho.tipo) {
+                    Pulos.Tipo.RECAPITULACAO -> R.string.player_pular_recap
+                    Pulos.Tipo.PREVIA -> R.string.player_pular_previa
+                    else -> R.string.player_pular_abertura
+                })
+                pular.tag = trecho
+                Icones.fim(pular, R.drawable.ic_skip_next)
+                pular.visibility = View.VISIBLE
+                if (base.visibility != View.VISIBLE) pular.requestFocus()
+            }
+        } else if (pular.visibility == View.VISIBLE) {
+            pular.visibility = View.GONE
+            if (currentFocus == null || currentFocus === pular) video.requestFocus()
+        }
+
+        val r = resolvido ?: return
+        val atual = ep ?: return
+        val seguinte = r.seguinte(atual) ?: return
+        // O cartão sobe quando os créditos começam; sem marca no TheIntroDB,
+        // quarenta segundos antes do fim.
+        val creditos = marcas?.creditos?.takeIf { it > duracao / 2 } ?: (duracao - 40_000)
+        if (posicao >= creditos && !proximoDispensado && proximo.visibility != View.VISIBLE) {
+            mostrarProximo(seguinte)
+        }
+    }
+
+    private fun pularTrecho(trecho: Pulos.Trecho? = pular.tag as? Pulos.Trecho) {
+        val p = player ?: return
+        val alvoTrecho = trecho ?: return
+        trechoPulado = alvoTrecho
+        val fim = alvoTrecho.fim ?: p.duration
+        p.seekTo(fim)
+        pular.visibility = View.GONE
+        video.requestFocus()
+    }
+
+    private fun mostrarProximo(seguinte: Titulos.Ep) {
+        val info = infoEpisodios[seguinte.numero].takeIf { seguinte.temporada == ep?.temporada }
+        findViewById<TextView>(R.id.proximoTitulo).text = listOfNotNull(
+            "T${seguinte.temporada} E${seguinte.numero}", info?.nome?.takeIf { it.isNotBlank() })
+            .joinToString(" · ")
+        val imagem = findViewById<ImageView>(R.id.proximoImagem)
+        if (info?.imagem != null) imagem.load(info.imagem) else imagem.setImageDrawable(null)
+        esconderControles()
+        proximo.visibility = View.VISIBLE
+        findViewById<View>(R.id.proximoAgora).requestFocus()
+        contagem = if (Preferencias.proximoAutomatico) CONTAGEM_S else -1
+        atualizarContagem()
+        if (contagem > 0) handler.postDelayed(contar, 1_000)
+    }
+
+    private val contar = object : Runnable {
+        override fun run() {
+            if (proximo.visibility != View.VISIBLE || contagem <= 0) return
+            if (player?.isPlaying == false && player?.playbackState != Player.STATE_ENDED) {
+                handler.postDelayed(this, 1_000); return
+            }
+            contagem--
+            atualizarContagem()
+            if (contagem == 0) irParaProximo(sozinho = true) else handler.postDelayed(this, 1_000)
+        }
+    }
+
+    private fun atualizarContagem() {
+        findViewById<TextView>(R.id.proximoContagem).text =
+            if (contagem > 0) getString(R.string.player_proximo_em, contagem)
+            else getString(R.string.player_proximo)
+    }
+
+    private fun dispensarProximo() {
+        proximoDispensado = true
+        handler.removeCallbacks(contar)
+        proximo.visibility = View.GONE
+        video.requestFocus()
+    }
+
+    private fun terminou() {
+        guardar()
+        val r = resolvido
+        val atual = ep
+        val seguinte = if (r != null && atual != null) r.seguinte(atual) else null
+        if (seguinte == null) {
+            if (r?.serie == true) Progresso.finalizarSerie(this, r.nomeChave)
+            mostrarRecomendacoes()
+            return
+        }
+        if (Preferencias.proximoAutomatico && contagem != 0) {
+            irParaProximo(sozinho = true)
+        } else if (proximo.visibility != View.VISIBLE) {
+            proximoDispensado = false
+            mostrarProximo(seguinte)
+        }
+    }
+
+    /** Tela pós-créditos no estilo de streaming, operável só pelo controle. */
+    private fun mostrarRecomendacoes() {
+        val r = resolvido
+        if (r == null) { finish(); return }
+        lifecycleScope.launch(semDerrubar) {
+            val parecidos = if (r.tmdbId > 0) {
+                runCatching { Detalhes.parecidos(this@PlayerActivity, r.tmdbId, r.serie) }
+                    .getOrDefault(emptyList())
+                    .map { it.achado }
+            } else emptyList<Vod.Achado>()
+            Generos.carregar(this@PlayerActivity)
+            val candidatos = if (parecidos.isNotEmpty()) parecidos else
+                runCatching { 
+                    Vod.entradas(this@PlayerActivity)
+                        .filter { Generos.capa(it.achado.titulo, it.achado.serie) != null }
+                        .shuffled()
+                        .map { it.achado } 
+                }.getOrDefault(emptyList())
+            val recomendados = parecidos
+                .ifEmpty { candidatos }
+                .filter { it.titulo.isNotBlank() && !it.titulo.equals(r.alvo.titulo, true) }
+                .distinctBy { it.titulo.lowercase(Locale.ROOT) }
+                .take(20)
+            val acoes = mutableListOf(getString(R.string.player_voltar) to { finish() })
+            mostrarAviso("Você terminou", "Mais títulos para você assistir", acoes)
+            val linha = findViewById<LinearLayout>(R.id.recomendacoesLinha)
+            linha.removeAllViews()
+            for (achado in recomendados) {
+                val alvoSugerido = Alvo(achado.titulo, achado.serie, achado.letra, achado.ano)
+                val capa = ImageView(this@PlayerActivity).apply {
+                    layoutParams = LinearLayout.LayoutParams(dp(190), dp(220))
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    setBackgroundResource(R.drawable.bg_card)
+                    Generos.capa(achado.titulo, achado.serie)?.let { load(it) }
                 }
-                result.fold(
-                    onSuccess = { file ->
-                        val previousFile = internalSubtitleFile
-                        internalSubtitleFile = file
-                        subtitleUrl = Uri.fromFile(file).toString()
-                        subtitleDelayMs = offsetMs
-                        reloadCurrentMediaItemWithSubtitle()
-                        if (previousFile != file) previousFile?.delete()
-                        Toast.makeText(
-                            this,
-                            "Sincronização aplicada: ${if (offsetMs > 0) "+" else ""}${offsetMs / 1_000}s",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    },
-                    onFailure = { error ->
-                        Toast.makeText(this, error.message ?: "Não foi possível ajustar a legenda", Toast.LENGTH_LONG).show()
+                linha.addView(LinearLayout(this@PlayerActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER_HORIZONTAL
+                    setBackgroundResource(R.drawable.botao_ficha)
+                    isFocusable = true
+                    setPadding(dp(4), dp(4), dp(4), dp(8))
+                    layoutParams = LinearLayout.LayoutParams(dp(198), dp(270)).apply { marginEnd = dp(12) }
+                    setOnClickListener { PlayerActivity.abrir(this@PlayerActivity, alvoSugerido) }
+                    addView(capa)
+                    addView(TextView(this@PlayerActivity).apply {
+                        text = Generos.semAno(achado.titulo)
+                        gravity = android.view.Gravity.CENTER
+                        textSize = 16f
+                        maxLines = 1
+                        ellipsize = android.text.TextUtils.TruncateAt.END
+                        setTextColor(androidx.core.content.ContextCompat.getColor(context, R.color.text_primary))
+                        layoutParams = LinearLayout.LayoutParams(dp(184), dp(38))
+                    })
+                })
+            }
+            findViewById<View>(R.id.recomendacoesScroll).visibility =
+                if (linha.childCount > 0) View.VISIBLE else View.GONE
+            linha.getChildAt(0)?.requestFocus()
+        }
+    }
+
+    private fun irParaProximo(sozinho: Boolean) {
+        val r = resolvido ?: return
+        val seguinte = ep?.let { r.seguinte(it) } ?: return
+        handler.removeCallbacks(contar)
+        guardar()
+        if (sozinho) seguidosSozinhos++ else seguidosSozinhos = 0
+        if (seguinte.temporada != ep?.temporada) infoEpisodios = emptyMap()
+        ep = seguinte
+        comecouSozinho = sozinho
+        // Sete episódios sem ninguém tocar no controle: talvez a pessoa tenha
+        // dormido. Pausar aqui economiza a internet de uma noite inteira.
+        if (sozinho && !pausaAutoplayDesativada && seguidosSozinhos >= 7) {
+            comecar(pedirRetomada = false, herdarFonte = true)
+            player?.playWhenReady = false
+            perguntarSeAindaAssiste()
+            return
+        }
+        comecar(pedirRetomada = false, herdarFonte = true)
+    }
+
+    private fun trocarEpisodio(alvoEp: Titulos.Ep) {
+        handler.removeCallbacks(contar)
+        guardar()
+        if (alvoEp.temporada != ep?.temporada) infoEpisodios = emptyMap()
+        seguidosSozinhos = 0
+        ep = alvoEp
+        comecar(pedirRetomada = true, herdarFonte = true)
+    }
+
+    private fun guardar() {
+        val p = player ?: return
+        val r = resolvido ?: return
+        if (!tocou) return
+        if (r.reservado || isLiveStream || isRadioStream) return
+        Progresso.salvar(this, r.chave(ep), p.currentPosition, p.duration)
+        ProximaNaTv.atualizar(this, r, ep, p.currentPosition, p.duration)
+    }
+
+    // MARK: - Avisos
+
+    private fun perguntarRetomada(posicao: Long) {
+        mostrarAviso(getString(R.string.player_retomar_titulo),
+            ep?.let { "T${it.temporada} E${it.numero}" } ?: Generos.semAno(alvo.titulo),
+            listOf(
+                getString(R.string.player_continuar_de, tempo(posicao)) + ICONE_PLAY to {
+                    esconderAviso(); player?.playWhenReady = true
+                },
+                getString(R.string.player_do_inicio) + ICONE_REPLAY to {
+                    esconderAviso(); player?.seekTo(0); player?.playWhenReady = true
+                },
+            ))
+    }
+
+    private fun perguntarSeAindaAssiste() {
+        mostrarAviso(getString(R.string.player_ainda_titulo), getString(R.string.player_ainda_texto),
+            listOf(
+                getString(R.string.player_continuar_novamente) to {
+                    seguidosSozinhos = 0; esconderAviso(); player?.playWhenReady = true
+                },
+                getString(R.string.player_continuar) to {
+                    pausaAutoplayDesativada = true
+                    seguidosSozinhos = 0
+                    esconderAviso()
+                    player?.playWhenReady = true
+                },
+                getString(R.string.player_sair) to { finish() },
+            ))
+    }
+
+    private fun mostrarErro(tituloAviso: String, texto: String) {
+        esconderCarregando()
+        val acoes = mutableListOf<Pair<String, () -> Unit>>(
+            getString(R.string.player_tentar_de_novo) to {
+                esconderAviso(); fonte = 0; tentadas.clear()
+                if (resolvido == null) lifecycleScope.launch(semDerrubar) { preparar() }
+                else tocarFonte(Progresso.posicao(this, resolvido!!.chave(ep)))
+            })
+        val r = resolvido
+        val seguinte = ep?.let { r?.seguinte(it) }
+        if (seguinte != null) acoes += getString(R.string.player_pular_para_proximo) to { irParaProximo(false) }
+        acoes += getString(R.string.player_voltar) to { finish() }
+        mostrarAviso(tituloAviso, texto, acoes)
+    }
+
+    private fun mostrarAviso(tituloAviso: String, texto: String, acoes: List<Pair<String, () -> Unit>>) {
+        esconderControles()
+        proximo.visibility = View.GONE
+        findViewById<View>(R.id.recomendacoesScroll).visibility = View.GONE
+        findViewById<TextView>(R.id.avisoTitulo).text = tituloAviso
+        findViewById<TextView>(R.id.avisoTexto).text = texto
+        val caixa = findViewById<LinearLayout>(R.id.avisoBotoes)
+        caixa.removeAllViews()
+        for ((rotulo, acao) in acoes) {
+            caixa.addView(TextView(this).apply {
+                text = rotulo.substringBefore('\u0000')
+                textSize = 20f
+                gravity = android.view.Gravity.CENTER
+                typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                setTextColor(androidx.core.content.ContextCompat.getColorStateList(context, R.color.texto_botao_ficha))
+                setBackgroundResource(R.drawable.botao_ficha)
+                isFocusable = true
+                setPadding(0, dp(14), 0, dp(14))
+                setOnClickListener { acao() }
+                when {
+                    rotulo.endsWith(ICONE_PLAY) -> Icones.inicio(this, R.drawable.ic_play)
+                    rotulo.endsWith(ICONE_REPLAY) -> Icones.inicio(this, R.drawable.ic_replay)
+                }
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10) }
+            })
+        }
+        aviso.visibility = View.VISIBLE
+        caixa.getChildAt(0)?.requestFocus()
+    }
+
+    private fun esconderAviso() {
+        aviso.visibility = View.GONE
+        video.requestFocus()
+    }
+
+    private fun mostrarCarregando(texto: String) {
+        status.text = texto
+        carregando.visibility = View.VISIBLE
+    }
+
+    private fun esconderCarregando() {
+        carregando.visibility = View.GONE
+    }
+    private val esconderCarregandoRunnable = Runnable { esconderCarregando() }
+
+    // MARK: - Barra de controle
+
+    private fun montarBotoes() {
+        botoes.removeAllViews()
+        val r = resolvido
+        // Nos óculos o BACK do controle não existe: sair do filme é um botão.
+        if (Vr.ativo) botao(getString(R.string.vr_voltar), "voltar", R.drawable.ic_arrow_back) {
+            onBackPressedDispatcher.onBackPressed()
+        }
+        if (!isLiveStream) botao(if (player?.isPlaying == true) getString(R.string.player_pausar)
+              else getString(R.string.player_tocar), "pausa",
+              if (player?.isPlaying == true) R.drawable.ic_pause else R.drawable.ic_play) { alternarPausa() }
+        if (Vr.ativo) {
+            botao(getString(R.string.vr_voltar_10), "menos10", R.drawable.ic_replay_10) { acumularPulo(-1, 0) }
+            botao(getString(R.string.vr_avancar_10), "mais10", R.drawable.ic_forward_10) { acumularPulo(1, 0) }
+        }
+        val atual = ep
+        if (r != null && atual != null) {
+            botao(getString(R.string.player_episodios), "eps", R.drawable.ic_episodes) { painelEpisodios() }
+            if (r.seguinte(atual) != null) botao(getString(R.string.player_proximo_ep), "prox", R.drawable.ic_skip_next) { irParaProximo(false) }
+        }
+        val versoes = (ep?.fontes ?: r?.filme?.fontes)?.keys.orEmpty()
+        if (versoes.size > 1) {
+            botao(Titulos.rotulo(versao), "versao", R.drawable.ic_translate) { painelVersao() }
+        }
+        if (opcoes.size > 1) {
+            botao(getString(R.string.player_fonte_n, fonte + 1), "fonte", R.drawable.ic_swap) { painelFonte() }
+        }
+        botao(getString(R.string.player_audio_legenda), "faixas", R.drawable.ic_subtitles) { painelFaixas() }
+        botao(getString(R.string.player_qualidade), "qualidade", R.drawable.ic_hd) { painelQualidade() }
+        botao("Velocidade ${velocidade}×", "velocidade", R.drawable.ic_forward_10) { cicloVelocidade() }
+        botao("Buffer: ${if (Aparelho.poucaMemoria || Preferencias.economia) "econômico" else "normal"}", "buffer", R.drawable.ic_hd) { alternarBuffer() }
+        botao(getString(R.string.player_recomecar), "inicio", R.drawable.ic_replay) { player?.seekTo(0); mostrarControles() }
+    }
+
+    private fun cicloVelocidade() {
+        val opcoes = listOf(0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+        val atual = opcoes.indexOfFirst { kotlin.math.abs(it - velocidade) < 0.01f }
+        velocidade = opcoes[(atual + 1).mod(opcoes.size)]
+        player?.playbackParameters = PlaybackParameters(velocidade, 1.0f)
+        Toast.makeText(this, "Velocidade ${velocidade}×", Toast.LENGTH_SHORT).show()
+        montarBotoes()
+        mostrarControles(focarLinha = false)
+    }
+
+    private fun alternarBuffer() {
+        if (Aparelho.poucaMemoria) {
+            Toast.makeText(this, "Modo econômico fixado para proteger a memória deste aparelho.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val atual = player
+        val posicao = atual?.currentPosition ?: 0L
+        val tocando = atual?.playWhenReady != false
+        Preferencias.economia = !Preferencias.economia
+        sessao?.release()
+        sessao = null
+        atual?.removeListener(ouvinte)
+        video.player = null
+        atual?.release()
+        player = null
+        tocarFonte(posicao, pausado = !tocando)
+        montarBotoes()
+        mostrarControles(focarLinha = false)
+    }
+
+    private fun botao(texto: String, marca: String, icone: Int, acao: () -> Unit) {
+        botoes.addView(TextView(this).apply {
+            text = texto
+            tag = marca
+            textSize = 18f
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            setTextColor(androidx.core.content.ContextCompat.getColorStateList(context, R.color.texto_botao_ficha))
+            setBackgroundResource(R.drawable.botao_player)
+            maxLines = 1
+            isFocusable = true
+            setPadding(dp(22), dp(10), dp(22), dp(10))
+            setOnClickListener { acao(); adiarEsconder() }
+            Icones.inicio(this, icone)
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginEnd = dp(12) }
+        })
+    }
+
+    private fun atualizarBotaoPausa() {
+        (botoes.findViewWithTag<TextView>("pausa"))?.let { b ->
+            val tocando = player?.playWhenReady == true
+            b.text = getString(if (tocando) R.string.player_pausar else R.string.player_tocar)
+            Icones.inicio(b, if (tocando) R.drawable.ic_pause else R.drawable.ic_play)
+        }
+    }
+
+    private fun alternarPausa() {
+        if (isLiveStream) return
+        val p = player ?: return
+        if (p.playbackState == Player.STATE_ENDED) p.seekTo(0)
+        p.playWhenReady = !p.playWhenReady
+        atualizarBotaoPausa()
+        mostrarControles(focarLinha = false)
+    }
+
+    private fun mostrarControles(focarLinha: Boolean = true) {
+        topo.visibility = View.VISIBLE
+        base.visibility = View.VISIBLE
+        // A legenda sobe acima da barra e dos botões enquanto eles estão na tela.
+        video.subtitleView?.setBottomPaddingFraction(LEGENDA_COM_CONTROLES)
+        if (focarLinha && !linha.hasFocus() && !botoes.hasFocus()) linha.requestFocus()
+        adiarEsconder()
+    }
+
+    private fun esconderControles() {
+        handler.removeCallbacks(esconder)
+        topo.visibility = View.GONE
+        base.visibility = View.GONE
+        bolha.visibility = View.INVISIBLE
+        video.subtitleView?.setBottomPaddingFraction(SubtitleView.DEFAULT_BOTTOM_PADDING_FRACTION)
+        if (pular.visibility == View.VISIBLE) pular.requestFocus() else video.requestFocus()
+    }
+
+    private val esconder = Runnable {
+        // Pausado, a barra fica: é onde se vê em que ponto o filme parou.
+        if (player?.isPlaying == true && alvoDoPulo == null) esconderControles() else adiarEsconder()
+    }
+
+    private fun adiarEsconder() {
+        handler.removeCallbacks(esconder)
+        handler.postDelayed(esconder, ESCONDER_MS)
+    }
+
+    // MARK: - Avançar e voltar
+
+    /// Para onde o vídeo vai quando a pessoa soltar a seta. Nulo sem pulo pendente.
+    private var alvoDoPulo: Long? = null
+
+    /**
+     * Cada toque soma um passo; segurar acelera — 10 s, depois 30 s, depois
+     * um minuto. O pulo só acontece quando a seta descansa: num TV Box, pedir
+     * cada pedacinho de vídeo no caminho travava a imagem.
+     */
+    private fun acumularPulo(sentido: Int, repeticao: Int) {
+        val p = player ?: return
+        val passo = when {
+            repeticao < 8 -> 10_000L
+            repeticao < 20 -> 30_000L
+            else -> 60_000L
+        }
+        val duracao = p.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: Long.MAX_VALUE
+        val base0 = alvoDoPulo ?: p.currentPosition
+        val novo = (base0 + sentido * passo).coerceIn(0, duracao - 1_000)
+        alvoDoPulo = novo
+        val delta = (novo - p.currentPosition) / 1000
+        bolha.text = "${tempo(novo)}   (${if (delta >= 0) "+" else "−"}${tempo(kotlin.math.abs(delta) * 1000)})"
+        bolha.visibility = View.VISIBLE
+        topo.visibility = View.VISIBLE
+        base.visibility = View.VISIBLE
+        atualizarTempo()
+        handler.removeCallbacks(confirmarPulo)
+        handler.postDelayed(confirmarPulo, 650)
+        adiarEsconder()
+    }
+
+    private val confirmarPulo = Runnable {
+        val destino = alvoDoPulo ?: return@Runnable
+        alvoDoPulo = null
+        player?.seekTo(destino)
+        bolha.visibility = View.INVISIBLE
+        atualizarTempo()
+    }
+
+    // MARK: - Painéis
+
+    /**
+     * Os episódios com imagem, temporadas em pílulas (ver PainelEpisodios.kt).
+     * Escolher um troca pelo mesmo caminho do "Próximo": versão, legenda,
+     * pulos e progresso seguem valendo.
+     */
+    private fun painelEpisodios() {
+        val r = resolvido ?: return
+        val atual = ep ?: return
+        // O cartão do episódio no ar mostra até onde ele foi agora, não na última pausa.
+        guardar()
+        esconderControles()
+        PainelEpisodios.mostrar(this, r, atual) { escolhido -> trocarEpisodio(escolhido) }
+    }
+
+    private fun painelVersao() {
+        val fontes = ep?.fontes ?: resolvido?.filme?.fontes ?: return
+        Painel.mostrar(this, getString(R.string.player_versao), fontes.keys.sortedBy { if (it == "dub") 0 else 1 }.map { v ->
+            Painel.Item(Titulos.rotulo(v), getString(R.string.player_servidores_n, fontes[v].orEmpty().size),
+                marcado = v == versao) {
+                if (v == versao) return@Item
+                versao = v
+                Preferencias.versao = v
+                val ponto = player?.currentPosition ?: 0L
+                opcoes = Titulos.ordem(fontes, versao)
+                fonte = 0
+                tentadas.clear()
+                atualizarTitulos()
+                montarBotoes()
+                tocarFonte(ponto)
+            }
+        })
+    }
+
+    /**
+     * Todas as fontes do título, de todas as versões, para quem quer escolher.
+     *
+     * O player já troca sozinho quando uma fonte não abre; aqui é para a que
+     * abre mas está ruim — travando, em baixa qualidade, com áudio fora.
+     * A troca continua do mesmo ponto.
+     */
+    private fun painelFonte() {
+        Painel.mostrar(this, getString(R.string.player_fontes), opcoes.mapIndexed { i, opcao ->
+            val servidor = runCatching { android.net.Uri.parse(opcao.url).host }.getOrNull()
+                ?.removePrefix("www.").orEmpty()
+            Painel.Item(getString(R.string.player_fonte_n, i + 1),
+                listOf(Titulos.rotulo(opcao.versao), servidor).filter { it.isNotEmpty() }.joinToString(" · "),
+                marcado = i == fonte) {
+                if (i == fonte) return@Item
+                val ponto = player?.currentPosition ?: 0L
+                fonte = i
+                // A automática segue dali para a frente, como sempre.
+                tentadas.clear(); tentadas += 0 until i
+                if (opcao.versao != versao) {
+                    versao = opcao.versao
+                    atualizarTitulos()
+                }
+                montarBotoes()
+                tocarFonte(ponto)
+            }
+        })
+    }
+
+    private fun painelFaixas() {
+        player?.let {
+            Faixas.audioELegenda(this, it, { estiloDaLegenda() },
+                externas = legendasExt, escolhida = legendaExt, atraso = legendaAtraso,
+                aoEscolherExterna = ::escolherLegendaExterna, aoAjustarAtraso = ::ajustarAtrasoDaLegenda)
+        }
+    }
+
+    private fun painelQualidade() { player?.let { Faixas.qualidade(this, it) } }
+
+    private fun limitarQualidade(p: ExoPlayer) {
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
+    }
+
+    /** Duas travadas longas seguidas: a internet não dá conta, desce para HD. */
+    private fun reduzirQualidade() {
+        val p = player ?: return
+        reduziu = true
+        limitarQualidade(p)
+        android.widget.Toast.makeText(this, R.string.player_qualidade_reduzida, android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    private fun aplicarLegendaPreferida(p: ExoPlayer) {
+        val idioma = Preferencias.legendaIdioma
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().apply {
+            if (idioma.isBlank()) setPreferredTextLanguage(null) else setPreferredTextLanguage(idioma)
+        }.build()
+    }
+
+    private fun estiloDaLegenda() {
+        val vista = video.subtitleView ?: return
+        val fundo = if (Preferencias.legendaFundo) 0x99000000.toInt() else 0x00000000
+        vista.setStyle(CaptionStyleCompat(0xFFFFFFFF.toInt(), fundo, 0x00000000,
+            CaptionStyleCompat.EDGE_TYPE_DROP_SHADOW, 0xFF000000.toInt(), null))
+        val fator = floatArrayOf(0.8f, 1f, 1.25f, 1.55f)[Preferencias.legenda.coerceIn(0, 3)]
+        vista.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * fator)
+    }
+
+    // MARK: - Voz e botões de mídia
+
+    private fun criarSessao(p: ExoPlayer) {
+        sessao = runCatching {
+            // Id próprio: a tela de canais tem a dela, e duas sessões com o
+            // mesmo id derrubam o app.
+            MediaSession.Builder(this, object : ForwardingPlayer(p) {
+                override fun play() { if (!isLiveStream) super.play() }
+                override fun pause() { if (!isLiveStream) super.pause() }
+                override fun seekToNext() = irParaProximo(false)
+                override fun seekToNextMediaItem() = irParaProximo(false)
+                override fun hasNextMediaItem() = ep?.let { resolvido?.seguinte(it) } != null
+                override fun isCommandAvailable(command: Int) =
+                    if (command == Player.COMMAND_SEEK_TO_NEXT || command == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                        hasNextMediaItem() else super.isCommandAvailable(command)
+            }).setId("vod").build()
+        }.getOrNull()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (isLiveStream && event.action == KeyEvent.ACTION_DOWN && event.keyCode in setOf(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE)) return true
+        if (event.action == KeyEvent.ACTION_DOWN && player != null && aviso.visibility != View.VISIBLE) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY,
+                KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                    val p = player!!
+                    p.playWhenReady = when (event.keyCode) {
+                        KeyEvent.KEYCODE_MEDIA_PLAY -> true
+                        KeyEvent.KEYCODE_MEDIA_PAUSE -> false
+                        else -> !p.playWhenReady
                     }
-                )
-            }
-        }
-    }
-
-    private fun reloadCurrentMediaItemWithSubtitle() {
-        val url = sourceUrls.getOrNull(currentIndex) ?: return
-        val position = player?.currentPosition ?: 0L
-        player?.setMediaSource(createMediaSource(url), position)
-        player?.prepare()
-        player?.playWhenReady = true
-    }
-
-    private fun showSubtitleOptions() {
-        if (tmdbId <= 0) {
-            promptExternalSubtitle()
-            return
-        }
-        Toast.makeText(this, "Buscando legendas online…", Toast.LENGTH_SHORT).show()
-        SubtitleSearchClient.search(
-            tmdbId = tmdbId,
-            isSeries = seasonNumber > 0,
-            season = seasonNumber,
-            episode = episodeNumber
-        ) { options ->
-            runOnUiThread {
-                if (isFinishing || isDestroyed) return@runOnUiThread
-                if (options.isEmpty()) {
-                    android.app.AlertDialog.Builder(this)
-                        .setTitle("Legendas online")
-                        .setMessage("Não encontrei legendas para este título agora. Você ainda pode inserir uma URL externa.")
-                        .setPositiveButton("Inserir URL") { _, _ -> promptExternalSubtitle() }
-                        .setNegativeButton("Fechar", null)
-                        .show()
-                    return@runOnUiThread
+                    mostrarControles(focarLinha = base.visibility != View.VISIBLE); return true
                 }
-                val labels = options.map { it.label }.toTypedArray()
-                android.app.AlertDialog.Builder(this)
-                    .setTitle("Legendas online · OpenSubtitles")
-                    .setItems(labels) { _, index ->
-                        options.getOrNull(index)?.let { applyExternalSubtitle(it.url, "application/x-subrip") }
+                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { acumularPulo(1, event.repeatCount + 8); return true }
+                KeyEvent.KEYCODE_MEDIA_REWIND -> { acumularPulo(-1, event.repeatCount + 8); return true }
+                KeyEvent.KEYCODE_MEDIA_NEXT -> { irParaProximo(false); return true }
+                KeyEvent.KEYCODE_CAPTIONS -> { painelFaixas(); return true }
+            }
+            val controlesAVista = base.visibility == View.VISIBLE
+            val cartao = proximo.visibility == View.VISIBLE || pular.hasFocus()
+            if (!controlesAVista && !cartao) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> { acumularPulo(-1, event.repeatCount); return true }
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> { acumularPulo(1, event.repeatCount); return true }
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> { mostrarControles(); return true }
+                    KeyEvent.KEYCODE_DPAD_UP -> { mostrarControles(); return true }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (ep != null) painelEpisodios() else mostrarControles(); return true
                     }
-                    .setNeutralButton("Inserir URL") { _, _ -> promptExternalSubtitle() }
-                    .setNegativeButton("Fechar", null)
-                    .show()
+                    KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_SETTINGS -> {
+                        painelFaixas(); return true
+                    }
+                }
+            } else if (controlesAVista) {
+                adiarEsconder()
             }
         }
-    }
-
-    private fun promptExternalSubtitle() {
-        val input = EditText(this).apply {
-            hint = "https://.../legenda.vtt ou .srt"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setSingleLine(true)
-            setText(subtitleUrl.orEmpty())
-        }
-        android.app.AlertDialog.Builder(this)
-            .setTitle("Adicionar legenda externa")
-            .setView(input)
-            .setNegativeButton("Cancelar", null)
-            .setPositiveButton("Aplicar") { _, _ ->
-                applyExternalSubtitle(input.text?.toString()?.trim().orEmpty())
-            }
-            .show()
-    }
-
-    private fun applyExternalSubtitle(candidate: String, mimeTypeOverride: String? = null) {
-        if (!PlaybackUrlPolicy.isSafeHttpUrl(candidate)) {
-            Toast.makeText(this, "Informe uma URL HTTP(S) válida, com host e sem credenciais.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (sourceUrls.getOrNull(currentIndex) == null) return
-        originalSubtitleUrl = candidate
-        val previousFile = internalSubtitleFile
-        internalSubtitleFile = null
-        subtitleUrl = candidate
-        subtitleDelayMs = 0L
-        subtitleMimeTypeOverride = mimeTypeOverride
-        reloadCurrentMediaItemWithSubtitle()
-        previousFile?.delete()
-    }
-
-    private fun tryNextSource() {
-        startupCheck?.let(handler::removeCallbacks)
-        startupCheck = null
-        val next = PlaybackSourcePolicy.nextUnattemptedIndex(sourceUrls, currentIndex, attempted)
-        if (next != null) {
-            playSource(next)
-            return
-        }
-
-        if (isRadio && !isFinishing) {
-            radioExperience?.setPlaybackState(false, errorMessage = "Esta estação falhou. Escolha outra.")
-            showRadioStationPicker()
-            return
-        }
-
-        // A broken episode should not strand the user when a later episode is available.
-        if (!isLive && !isRadio && queueIndex < episodeQueue.size && !isFinishing && !failureDialogShown) {
-            failureDialogShown = true
-            val nextEpisode = episodeQueue[queueIndex]
-            android.app.AlertDialog.Builder(this)
-                .setTitle("Fontes indisponíveis")
-                .setMessage(
-                    "Não foi possível iniciar este conteúdo. Deseja pular para " +
-                        nextEpisode.title + "?"
-                )
-                .setPositiveButton("Tentar próximo episódio") { _, _ -> playQueuedEpisode() }
-                .setNegativeButton("Fechar player") { _, _ -> finish() }
-                .setOnCancelListener { if (!isFinishing) finish() }
-                .show()
-            return
-        }
-
-        showPlaybackFailureDialog()
-    }
-
-    private fun showPlaybackFailureDialog() {
-        if (isFinishing || failureDialogShown) return
-        failureDialogShown = true
-        val detail = lastPlaybackErrorMessage?.takeIf { it.isNotBlank() }
-            ?: "Nenhuma fonte respondeu dentro do tempo limite configurado."
-        val message = "O CineHUB tentou ${attempted.size} fonte(s), mas nenhuma iniciou.\n\nDetalhe técnico: $detail"
-        val dialog = android.app.AlertDialog.Builder(this)
-            .setTitle("Não foi possível reproduzir")
-            .setMessage(message)
-            .setCancelable(true)
-            .setPositiveButton("Tentar novamente") { _, _ ->
-                startupCheck?.let(handler::removeCallbacks)
-                startupCheck = null
-                attempted.clear()
-                currentIndex = 0
-                lastPlaybackErrorMessage = null
-                failureDialogShown = false
-                playSource(0)
-            }
-            .setNegativeButton("Voltar ao catálogo") { _, _ -> finish() }
-            .create()
-        dialog.setOnCancelListener { failureDialogShown = false }
-        dialog.show()
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isLive && !isRadio && (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
-                    keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE)) {
-            return true
-        }
-        if ((keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
-                    (isRadio && (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY || keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE))) &&
-            player != null) {
-            if (isRadio) {
-                if (player!!.isPlaying) player!!.pause() else player!!.play()
-            } else {
-                player!!.playWhenReady = !player!!.playWhenReady
+        if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+            when {
+                proximo.visibility == View.VISIBLE -> { dispensarProximo(); return true }
+                base.visibility == View.VISIBLE -> { esconderControles(); return true }
             }
-            return true
         }
         return super.onKeyDown(keyCode, event)
     }
 
-    override fun onStop() {
-        introCheckRunnable?.let(handler::removeCallbacks)
-        introCheckRunnable = null
-        introPrompt?.dismiss()
-        introPrompt = null
-        cancelStillWatchingPrompt()
-        stillWatchingDialog?.dismiss()
-        stillWatchingDialog = null
-        backgrounding = true
-        resumeAfterStop = !isFinishing && player?.playWhenReady == true
-        super.onStop()
-        cancelProgressSave()
-        persistPlaybackProgress()
-        if (!isFinishing) player?.pause()
-        if (::playerView.isInitialized) playerView.player = null
-        radioExperience?.setPlaybackState(false)
-    }
-
     override fun onStart() {
         super.onStart()
-        if (startupFailed || !::playerView.isInitialized) return
-        playerView.player = if (isRadio) null else player
-        backgrounding = false
-        if (resumeAfterStop && !isFinishing) player?.play()
-        resumeAfterStop = false
-        scheduleIntroCheck()
-        scheduleStillWatchingPrompt()
     }
 
-    override fun onTrimMemory(level: Int) {
-        super.onTrimMemory(level)
-        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
-            CatalogClient.clearMemoryCache()
-        }
+    override fun onStop() {
+        super.onStop()
+        guardar()
+        player?.playWhenReady = false
+        // Relógio da barra, pulos e próximo episódio: nada disso aparece fora da tela.
+        handler.removeCallbacks(tique)
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        handler.removeCallbacks(tique)
+        handler.post(tique)
     }
 
     override fun onDestroy() {
-        startupCheck?.let(handler::removeCallbacks)
-        introCheckRunnable?.let(handler::removeCallbacks)
-        introCheckRunnable = null
-        introPrompt?.dismiss()
-        introPrompt = null
-        cancelStillWatchingPrompt()
-        stillWatchingDialog?.dismiss()
-        stillWatchingDialog = null
-        cancelProgressSave()
-        cancelNextEpisodeCountdown()
-        posterExecutor.shutdownNow()
-        providerResolverExecutor.shutdownNow()
-        subtitleExecutor.shutdownNow()
-        if (::playerView.isInitialized) playerView.player = null
+        handler.removeCallbacksAndMessages(null)
+        if (player != null) Telemetria.parou()
+        sessao?.release()
         player?.release()
         player = null
-        internalSubtitleFile?.delete()
-        internalSubtitleFile = null
         super.onDestroy()
     }
+
+    private fun tempo(ms: Long): String {
+        val s = (ms / 1000).coerceAtLeast(0)
+        val h = s / 3600
+        val m = (s % 3600) / 60
+        val seg = s % 60
+        return if (h > 0) "%d:%02d:%02d".format(h, m, seg) else "%d:%02d".format(m, seg)
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 }
