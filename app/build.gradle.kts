@@ -13,8 +13,8 @@ android {
         applicationId = "br.com.cinehub.tv"
         minSdk = 23
         targetSdk = 28
-        versionCode = 133
-        versionName = "1.3.3"
+        versionCode = 134
+        versionName = "1.3.4-home-test"
     }
 
     compileOptions {
@@ -38,7 +38,7 @@ android {
     buildTypes {
         getByName("debug") {
             applicationIdSuffix = ".test"
-            versionNameSuffix = "-player-test"
+            versionNameSuffix = "-debug"
         }
         getByName("release") {
             isMinifyEnabled = false
