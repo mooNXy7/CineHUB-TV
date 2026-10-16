@@ -259,8 +259,8 @@ class MainActivity : AppCompatActivity() {
 
         io.execute {
             try {
-                val items = (OnlineCatalogRepository.feed("Filmes") +
-                    OnlineCatalogRepository.feed("Séries"))
+                val items = (OnlineCatalogRepository.previewFeed("Filmes") +
+                    OnlineCatalogRepository.previewFeed("Séries"))
                     .filter { !it.poster.isNullOrBlank() }
                     .distinctBy { it.id }
                     .take(12)
