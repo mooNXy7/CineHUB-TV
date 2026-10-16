@@ -19,7 +19,7 @@ Para gerar uma release assinada, configure `CINEHUB_TV_KEYSTORE_BASE64`, `CINEHU
 ## Estrutura ativa
 
 - `app/`: aplicativo Kotlin nativo, catálogo e player Media3/ExoPlayer.
-- `.github/workflows/kotlin-ota-release.yml`: pipeline de release oficial, acionado apenas pela branch `release/kotlin-ota-v1.3.3` ou manualmente.
+- A publicação assinada e a OTA oficial continuam isoladas na branch `release/kotlin-ota-v1.3.3`; este PR não adiciona uma segunda entrada manual de publicação em `main`.
 - `.github/workflows/kotlin-pr-validation.yml`: compilação e validação de metadados em pull requests para `main`.
 - `frontend/` e `downloader-site/`: interfaces e página de download.
 - `android/CineHUB-TV/src/main/assets/cinehub/`: site web publicado no Cloudflare Pages; esses arquivos são preservados. Foi removido apenas o invólucro Android WebView legado.
