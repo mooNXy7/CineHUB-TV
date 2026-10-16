@@ -33,6 +33,7 @@ const SOURCES={
   ]
 };
 const ACERVO_MAP_URL='https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/catalog/epg/channel-map.json';
+const ACERVO_SOURCES_URL='https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/catalog/epg/sources.json';
 const MEUGUIA_BASE='https://meuguia.tv/programacao/canal/';
 const GUIADETV_BASE='https://www.guiadetv.com/canal/';
 
@@ -339,12 +340,21 @@ function parseGuiaDeTv(html){
   partial.sort((a,b)=>a.start-b.start);
   return partial.map((p,i)=>({...p,stop:partial[i+1]?.start||p.start+3600000})).filter(p=>p.stop>Date.now()-PAST&&p.start<Date.now()+FUTURE);
 }
-async function loadAcervoMap(){
-  try{return await fetch(ACERVO_MAP_URL,{cache:'no-store',signal:AbortSignal.timeout(8000)}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()})}
-  catch(e){console.warn('[CineHUB] Mapa EPG remoto indisponível; XMLTV segue ativo.',e);return null}
+async function loadAcervoConfig(){
+  const [mapResult,sourceResult]=await Promise.allSettled([fetchText(ACERVO_MAP_URL,8000),fetchText(ACERVO_SOURCES_URL,8000)]);
+  let map=null,registry=null;
+  if(mapResult.status==='fulfilled'){try{map=JSON.parse(mapResult.value)}catch{}}
+  if(sourceResult.status==='fulfilled'){try{registry=JSON.parse(sourceResult.value)}catch{}}
+  if(!map||!registry)console.warn('[CineHUB] Configuração remota de EPG incompleta; fontes locais de reserva seguem ativas.');
+  return {map,sources:Array.isArray(registry?.sources)?registry.sources:[]};
 }
-async function fetchMappedSchedules(channels,mapDoc,kind,already){
+async function fetchMappedSchedules(channels,config,kind,already){
+  const mapDoc=config?.map;
   if(!mapDoc)return new Map();
+  const sourceId=kind==='meuguia'?'meuguia-br':'guia-de-tv-br';
+  const registered=(config.sources||[]).find(x=>x.id===sourceId);
+  const template=registered?.url_template;
+  const urlFor=code=>template?template.replace('{code}',encodeURIComponent(code)):(kind==='meuguia'?MEUGUIA_BASE:GUIADETV_BASE)+encodeURIComponent(code);
   const codes=kind==='meuguia'?(mapDoc.meuguia_codes||{}):(mapDoc.guiadetv_slugs||{});
   const entries=new Map();
   for(const ch of channels){
@@ -359,12 +369,11 @@ async function fetchMappedSchedules(channels,mapDoc,kind,already){
     }
   }
   if(!entries.size)return new Map();
-  const base=kind==='meuguia'?MEUGUIA_BASE:GUIADETV_BASE;
   const preferredProbe=kind==='meuguia'?(codes.HBO||'HBO'):(codes['SONY Movies']||'sony-movies');
   const codesList=[...entries.keys()],probeCode=entries.has(preferredProbe)?preferredProbe:codesList[0];
   const results=new Map();let ok=0,failed=0,index=0;
   try{
-    const html=await fetchText(base+encodeURIComponent(probeCode),8000);
+    const html=await fetchText(urlFor(probeCode),8000);
     const parsed=kind==='meuguia'?parseMeuGuia(html):parseGuiaDeTv(html);
     if(!parsed.length)throw new Error('Página acessível, mas sem grade reconhecível.');
     ok++;
@@ -378,7 +387,7 @@ async function fetchMappedSchedules(channels,mapDoc,kind,already){
       const i=index++;if(i>=codesList.length)return;
       const code=codesList[i];if(code===probeCode)continue;
       try{
-        const html=await fetchText(base+encodeURIComponent(code),8000);
+        const html=await fetchText(urlFor(code),8000);
         const programmes=kind==='meuguia'?parseMeuGuia(html):parseGuiaDeTv(html);
         if(!programmes.length)throw new Error('Sem programas reconhecíveis');
         for(const ch of entries.get(code)||[])results.set(ch.nome,programmes);
@@ -466,7 +475,13 @@ async function load(channels,force=false){
     const merged=new Map();
     const plutoMap=getPlutoMap(list);
     const wanted=list.filter(ch=>!plutoMapHasChannel(plutoMap,ch));
-    const sources=SOURCES[state.source]||SOURCES.default;
+    const epgConfig=await loadAcervoConfig();
+    const registeredSources=(epgConfig.sources||[])
+      .filter(x=>x.enabled&&x.format==='xmltv'&&x.url)
+      .sort((a,b)=>(Number(a.priority)||9999)-(Number(b.priority)||9999))
+      .map(x=>[x.name||x.id,x.url]);
+    if(state.source==='alternate')registeredSources.reverse();
+    const sources=registeredSources.length?registeredSources:(SOURCES[state.source]||SOURCES.default);
 
     /* Each source is isolated: one CORS/HTTP failure cannot hide data from the
      * next source; a single upstream failure never aborts the other sources. */
@@ -489,10 +504,9 @@ async function load(channels,force=false){
     }
 
     // Channel-specific schedules override generic XMLTV where available.
-    const epgMap=await loadAcervoMap();
-    const meuguia=await fetchMappedSchedules(wanted,epgMap,'meuguia',merged);
+    const meuguia=await fetchMappedSchedules(wanted,epgConfig,'meuguia',merged);
     meuguia.forEach((programmes,name)=>merged.set(name,programmes));
-    const guiadetv=await fetchMappedSchedules(wanted,epgMap,'guiadetv',merged);
+    const guiadetv=await fetchMappedSchedules(wanted,epgConfig,'guiadetv',merged);
     guiadetv.forEach((programmes,name)=>{if(!(merged.get(name)||[]).length)merged.set(name,programmes)});
 
     if(merged.size){apply(merged)}
