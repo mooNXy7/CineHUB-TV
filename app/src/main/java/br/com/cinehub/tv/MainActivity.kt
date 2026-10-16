@@ -264,10 +264,10 @@ class MainActivity : AppCompatActivity() {
                     heroItems.firstOrNull()?.let { bindHomeHero(it) }
                     mainHandler.removeCallbacks(homeHeroTick)
                     if (heroItems.size > 1) mainHandler.postDelayed(homeHeroTick, 8_000L)
-                    renderMediaCards(movies, movieRow, "Filmes em Alta") { showMediaDetails(it) }
-                    renderMediaCards(series, seriesRow, "Séries para Maratonar") { showMediaDetails(it) }
-                    renderMediaCards(doramas, doramaRow, "Doramas") { showMediaDetails(it) }
-                    renderMediaCards(animes, animeRow, "Animes") { showMediaDetails(it) }
+                    renderMediaCards(movies, movieRow, "Filmes em Alta", onItemClick = { item -> showMediaDetails(item) })
+                    renderMediaCards(series, seriesRow, "Séries para Maratonar", onItemClick = { item -> showMediaDetails(item) })
+                    renderMediaCards(doramas, doramaRow, "Doramas", onItemClick = { item -> showMediaDetails(item) })
+                    renderMediaCards(animes, animeRow, "Animes", onItemClick = { item -> showMediaDetails(item) })
                     populateHomeChannelRow(channelRow)
                 }
             } catch (_: Exception) {
@@ -406,7 +406,7 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(d(42), d(8), d(42), d(4))
         }
-        renderMediaCards(items, continueRow, "Continuar assistindo") { item ->
+        renderMediaCards(items, continueRow, "Continuar assistindo", onItemClick = { item ->
             val record = records[item.id] ?: return@renderMediaCards
             val sourcesJson = record.optJSONArray("sources") ?: org.json.JSONArray()
             val sources = (0 until sourcesJson.length()).mapNotNull { sourcesJson.optString(it).takeIf { url -> url.startsWith("http://") || url.startsWith("https://") } }
