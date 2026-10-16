@@ -590,7 +590,7 @@ class MainActivity : AppCompatActivity() {
         }
         fun shelf(title: String, items: List<MediaItem>) {
             val unique = items.filter { it.title.isNotBlank() }.distinctBy { normalized(it.title) }.take(36)
-            if (unique.isNotEmpty()) renderMediaCards(unique, container, title)
+            if (unique.isNotEmpty()) renderMediaCards(unique, container, title, append = true)
         }
         fun hasGenre(item: MediaItem, ids: Set<Int>, names: Set<String>): Boolean =
             item.genreIds.any { it in ids } || item.genreNames.any { name -> names.any { name.contains(it, true) } }
@@ -683,9 +683,10 @@ private fun normalizeMediaTitle(value: String): String =
         items: List<MediaItem>,
         container: LinearLayout,
         heading: String? = null,
-        onItemClick: ((MediaItem) -> Unit)? = null
+        onItemClick: ((MediaItem) -> Unit)? = null,
+        append: Boolean = false
     ) {
-        container.removeAllViews()
+        if (!append) container.removeAllViews()
         if (items.isEmpty()) {
             container.addView(label("Quando o catálogo responder, os títulos aparecerão aqui com suas capas.", 14, MUTED, false).apply {
                 setPadding(d(2), d(12), d(0), d(18))
