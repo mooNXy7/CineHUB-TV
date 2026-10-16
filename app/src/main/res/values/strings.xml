@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">CineHUB Player</string>
+    <string name="player_abrindo">Abrindo…</string>
+    <string name="player_sumiu_titulo">Título indisponível</string>
+    <string name="player_sumiu_texto">Este título saiu do acervo ou mudou de lugar.</string>
+    <string name="player_legenda_baixando">Baixando a legenda…</string>
+    <string name="player_legenda_falhou">Não foi possível baixar esta legenda. Tente outra versão.</string>
+    <string name="player_outro_servidor">Tentando outro servidor…</string>
+    <string name="player_fonte_n">Fonte %1$d</string>
+    <string name="player_erro_texto_serie">Os servidores deste episódio não responderam agora. Tente de novo, ou vá para o próximo.</string>
+    <string name="player_erro_texto">Os servidores deste título não responderam agora. Tente de novo em alguns minutos.</string>
+    <string name="player_erro_titulo">Não deu para abrir este vídeo</string>
+    <string name="player_carregando">Carregando…</string>
+    <string name="player_reconectando">Reconectando…</string>
+    <string name="player_pular_recap">Pular recapitulação</string>
+    <string name="player_pular_previa">Pular prévia</string>
+    <string name="player_pular_abertura">Pular abertura</string>
+    <string name="player_proximo_em">Próximo episódio em %1$d s</string>
+    <string name="player_proximo">Próximo episódio</string>
+    <string name="player_voltar">Voltar</string>
+    <string name="player_retomar_titulo">Continuar de onde parou?</string>
+    <string name="player_continuar_de">Continuar de %1$s</string>
+    <string name="player_do_inicio">Começar do início</string>
+    <string name="player_ainda_titulo">Ainda está assistindo?</string>
+    <string name="player_ainda_texto">Pausamos depois de 7 episódios automáticos para saber se você ainda está assistindo.</string>
+    <string name="player_continuar_novamente">Continuar e mostrar novamente</string>
+    <string name="player_continuar">Continuar sem parar</string>
+    <string name="player_sair">Fechar conteúdo</string>
+    <string name="player_tentar_de_novo">Tentar de novo</string>
+    <string name="player_pular_para_proximo">Ir para o próximo episódio</string>
+    <string name="vr_voltar">Voltar</string>
+    <string name="player_pausar">Pausar</string>
+    <string name="player_tocar">Continuar</string>
+    <string name="vr_voltar_10">10 s</string>
+    <string name="vr_avancar_10">10 s</string>
+    <string name="player_episodios">Episódios</string>
+    <string name="player_proximo_ep">Próximo</string>
+    <string name="player_audio_legenda">Áudio e legendas</string>
+    <string name="player_qualidade">Qualidade</string>
+    <string name="player_recomecar">Do início</string>
+    <string name="player_versao">Versão</string>
+    <string name="player_servidores_n">%1$d servidor(es)</string>
+    <string name="player_fontes">Fontes</string>
+    <string name="player_qualidade_reduzida">Internet lenta: qualidade reduzida para o vídeo não travar</string>
+    <string name="player_assistir_agora">Assistir agora</string>
+    <string name="player_ver_creditos">Ver créditos</string>
+    <string name="player_eps_dica">Esquerda e direita escolhem · em cima troca a temporada · OK assiste · VOLTAR fecha</string>
+    <string name="player_eps_assistindo">Assistindo</string>
+    <string name="player_visto">Visto</string>
+    <string name="player_eps_no_ar">Assistindo T%1$d E%2$d</string>
+    <string name="player_eps_dica_toque">Toque para assistir · toque fora para fechar</string>
+    <string name="vr_fechar">Fechar</string>
+    <string name="vod_temporada">Temporada %1$d</string>
+    <string name="vod_episodio">Episódio %1$d</string>
+    <string name="player_audio_item">Áudio: %1$s</string>
+    <string name="player_sem_legenda">Sem legenda</string>
+    <string name="player_legenda_item">Legenda: %1$s</string>
+    <string name="player_sincronia_legenda">Sincronia da legenda</string>
+    <string name="player_tamanho_legenda">Tamanho da legenda</string>
+    <string name="faixas_so_uma">Este vídeo tem só um áudio e nenhuma legenda.</string>
+    <string name="player_sincronia_original">Original</string>
+    <string name="player_sincronia_atrasar">Atrasar %1$s s</string>
+    <string name="player_sincronia_adiantar">Adiantar %1$s s</string>
+    <string name="player_qualidade_auto">Automática</string>
+    <string name="player_qualidade_auto_dica">ajusta à sua internet</string>
+    <string name="player_qualidade_unica">Este vídeo tem uma qualidade só</string>
+    <string name="player_idioma_padrao">Original</string>
+    <string name="vr_mostrar_controles">Mostrar controles</string>
+    <string name="vr_painel_dica">Toque para escolher · toque fora para fechar</string>
+    <string name="faixa_qualidade">Qualidade da imagem</string>
+    <string name="faixa_audio">Idioma do áudio</string>
+    <string name="faixa_legendas">Legendas</string>
+    <string name="faixas_titulo">Qualidade, áudio e legendas</string>
+
+    <string name="painel_dica">Use as setas para navegar · OK para selecionar · Voltar para fechar</string>
+<string-array name="tamanhos_legenda">
+        <item>Pequena</item>
+        <item>Média</item>
+        <item>Grande</item>
+        <item>Enorme</item>
+    </string-array>
+</resources>
