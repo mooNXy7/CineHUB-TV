@@ -417,7 +417,7 @@ class MainActivity : AppCompatActivity() {
                 launchMediaPlayback(originalItem, sources, record.optString("playbackTitle", originalItem.title),
                     item.id, record.optLong("positionMs", 0L))
             }
-        }
+        })
         // Keep the hero as the first item; insert Continue Watching directly below it.
         content.addView(continueRow, 1.coerceAtMost(content.childCount), LinearLayout.LayoutParams(-1, -2))
     }
