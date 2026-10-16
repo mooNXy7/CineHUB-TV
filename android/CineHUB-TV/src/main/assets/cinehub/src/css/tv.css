@@ -1,0 +1,51 @@
+/* CineHUB TV 1.0.9 — dedicated 16:9 streaming interface */
+:root{--tv-red:#E50914;--tv-bg:#050506;--tv-panel:#101013;--tv-text:#fff;--tv-muted:#9b9ba2}
+html,body{width:100%;min-width:100%;min-height:100%;background:var(--tv-bg)!important;color:var(--tv-text);overflow-x:hidden}
+html *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+body{font-family:Arial,Helvetica,sans-serif;overscroll-behavior:none}
+.ambient{display:none!important}
+button:focus,input:focus,a:focus,[tabindex]:focus{outline:none}
+.cinehub-tv-focus{outline:3px solid var(--tv-red)!important;outline-offset:5px!important;box-shadow:0 0 0 7px rgba(229,9,20,.20),0 18px 45px rgba(0,0,0,.55)!important;transform:scale(1.035)!important;z-index:50!important}
+#tvMainNav{position:sticky;top:0;z-index:120;height:72px;display:flex;align-items:center;gap:8px;padding:0 5vw;background:rgba(5,5,6,.98);border-bottom:1px solid rgba(255,255,255,.09)}
+.tv-nav-brand{display:flex;align-items:center;margin-right:28px}.tv-nav-brand img{width:190px;max-height:44px;object-fit:contain}
+.tv-nav-item{height:46px;padding:0 20px;border:0;border-radius:8px;background:transparent;color:#a9a9b0;font-size:16px;font-weight:700;cursor:pointer}
+.tv-nav-item.active,.tv-nav-item.cinehub-tv-focus{color:#fff;background:#18181c}
+.tv-nav-item.active:after{content:"";display:block;height:3px;margin:5px 7px 0;background:var(--tv-red);border-radius:3px}
+.tv-nav-spacer{flex:1}.tv-nav-hint{color:#66666d;font-size:12px}
+#homeMain{padding-bottom:80px!important}
+.topbar{display:none!important}
+.hero{position:relative;min-height:560px!important;height:62vh;max-height:700px!important;margin:0!important;border-radius:0!important}
+.hero:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#050506 0%,rgba(5,5,6,.82) 24%,rgba(5,5,6,.18) 62%,rgba(5,5,6,.72) 100%),linear-gradient(0deg,#050506 0%,transparent 32%);pointer-events:none}
+.hero-content{position:relative;z-index:2;width:min(650px,48vw)!important;padding:8vh 5vw!important}
+.hero-content h1{font-size:clamp(46px,5vw,82px)!important;line-height:1.02!important;letter-spacing:-.04em}
+.hero-content p{font-size:clamp(16px,1.25vw,21px)!important;line-height:1.55!important;color:#d2d2d6!important}
+.hero-actions{gap:12px!important}.primary,.secondary,.text-btn,.icon-btn{min-height:52px!important}
+.primary{background:var(--tv-red)!important;border-color:var(--tv-red)!important}.secondary{background:#151519!important;border-color:#29292f!important}
+.section{padding:34px 5vw!important;content-visibility:visible!important;contain:none!important}
+.section-head{margin-bottom:16px!important}.section-head h2{font-size:30px!important}.section-head .muted{font-size:14px}
+.row{display:grid!important;grid-auto-flow:column!important;grid-auto-columns:220px!important;grid-template-rows:1fr!important;gap:18px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:10px 7px 20px!important;scrollbar-width:none;scroll-snap-type:x proximity}
+.row::-webkit-scrollbar{display:none}
+.card{min-width:0!important;min-height:320px!important;background:#101013!important;border:1px solid #1e1e23!important;border-radius:8px!important;overflow:hidden;scroll-snap-align:start}
+.card.cinehub-tv-focus{border-color:var(--tv-red)!important}
+#programRow .channel{min-width:0!important;width:auto!important}
+.channel{min-height:210px!important;background:#101013!important;border:1px solid #1e1e23!important;border-radius:8px!important}
+.explore-card,.premium-card{background:#101013!important;border:1px solid #202025!important}
+#legacyExploreSection,#projectSection,#welcomeModal{display:none!important}
+.screen{background:#050506!important;z-index:200!important}
+.screen-inner{max-width:1700px!important;padding:44px 5vw 90px!important;margin:auto}
+.screen-head{gap:18px!important;margin-bottom:24px}.screen-head h1{font-size:52px!important}
+.grid{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:18px!important}
+.channel-grid{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:18px!important}
+.tv-screen .screen-inner{max-width:1700px!important;padding-top:34px!important}
+.tv-tabs{gap:10px;margin-bottom:22px}.tv-tab{min-height:52px;padding:0 24px;background:#121216;border:1px solid #25252b;border-radius:8px;color:#aaa;font-size:15px}.tv-tab.active{background:#211014;color:#fff;border-color:#5a151c}
+.popular-channels{background:#0d0d10!important;border:1px solid #202025!important;border-radius:10px!important;padding:18px;margin-bottom:18px}
+.tv-live-bar,.guide-toolbar{background:#0d0d10!important;border:1px solid #202025!important;border-radius:10px!important;padding:18px!important}
+.sheet-panel{background:#0b0b0e!important;border:1px solid #29292f!important;border-radius:12px!important}
+.detail{background:#050506!important}.player{background:#000!important}
+.player-frame{width:min(1500px,94vw)!important;height:min(78vh,820px)!important;border-radius:4px!important;border:1px solid #222!important}
+.player-fullscreen{background:#111!important;border-radius:6px!important}
+.search-wrap{margin-bottom:18px}.search{min-height:54px!important;font-size:16px!important;background:#111!important}
+.chips{gap:9px}.chip{min-height:42px!important;background:#111!important;border:1px solid #27272d!important}
+@media(max-width:1500px){.grid{grid-template-columns:repeat(5,minmax(0,1fr))!important}.channel-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.row{grid-auto-columns:205px!important}}
+@media(max-width:1100px){.tv-nav-brand{margin-right:10px}.tv-nav-brand img{width:155px}.tv-nav-item{padding:0 13px;font-size:14px}.grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.channel-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}.hero-content{width:58vw!important}.section,.screen-inner{padding-left:4vw!important;padding-right:4vw!important}}
+@media(min-width:1900px){.tv-nav-brand img{width:220px}.tv-nav-item{font-size:17px;padding:0 24px}.row{grid-auto-columns:240px!important}.grid{gap:22px}.channel-grid{gap:20px}}

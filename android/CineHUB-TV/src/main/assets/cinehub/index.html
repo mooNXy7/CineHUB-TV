@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080808"><meta name="description" content="CineHUB TV — sua central de entretenimento.">
+  <title>CineHUB TV 1.2.8</title><link rel="icon" type="image/png" href="assets/logos/favicon-32.png"><link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="splash-screen" id="splashScreen" aria-label="Carregando CineHUB TV">
+  <div class="splash-glow"></div><img src="assets/logos/logo-completa.png" alt="CineHUB" class="splash-logo">
+  <div class="splash-title">CineHUB TV</div><p class="splash-subtitle">Sua central de Filmes</p>
+  <div class="splash-progress"><span></span></div><span class="splash-caption">PREPARANDO SUA EXPERIÊNCIA</span>
+</div>
+<div class="page-loader" id="pageLoader" aria-hidden="true"><img src="assets/logos/simbolo.png" alt=""><span>Preparando sua experiência</span></div>
+<div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+<div class="app-shell">
+<header class="topbar">
+  <a class="brand" href="#inicio" aria-label="CineHUB TV — Home"><img src="assets/logos/logo-horizontal.png" alt="CineHUB TV" class="brand-logo"></a>
+  <nav class="main-nav" aria-label="Navegação principal" id="mainNav">
+    <button class="nav-item" data-view="buscar">Buscar</button><button class="nav-item is-active" data-view="inicio">Home</button><button class="nav-item" data-view="filmes">Filmes</button><button class="nav-item" data-view="series">Séries</button><button class="nav-item" data-view="ao-vivo">Ao vivo</button><button class="nav-item" data-view="radio">Rádios</button><button class="nav-item" data-view="lista">Minha Lista</button>
+  </nav>
+  <div class="topbar-tools"><time id="brClock" class="br-clock" aria-label="Horário de Brasília">--:--:--</time><button class="icon-button settings-button" id="settingsToggle" aria-label="Configurações" title="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.7 2.94-.09-.02a1.7 1.7 0 0 0-1.75.68l-.05.08h-3.4l-.03-.09a1.7 1.7 0 0 0-1.42-1.1 1.7 1.7 0 0 0-1.2.3l-.08.05-2.94-1.7.02-.09a1.7 1.7 0 0 0-.68-1.75l-.08-.05v-3.4l.09-.03a1.7 1.7 0 0 0 1.1-1.42 1.7 1.7 0 0 0-.3-1.2l-.05-.08 1.7-2.94.09.02a1.7 1.7 0 0 0 1.75-.68l.05-.08h3.4l.03.09a1.7 1.7 0 0 0 1.42 1.1 1.7 1.7 0 0 0 1.2-.3l.08-.05 2.94 1.7-.02.09a1.7 1.7 0 0 0 .68 1.75l.08.05v3.4z"></path></svg></button></div>
+</header>
+<main id="mainContent" tabindex="-1">
+<section class="hero" id="homeHero"><div class="hero-content"><h1 id="heroTitle">Lançamentos <span>2026</span></h1><p class="hero-copy" id="heroCopy">Carregando novidades do catálogo online...</p><p class="hero-copy" id="heroMeta" aria-live="polite"></p><div class="hero-actions"><button class="secondary-button" id="heroDetails">Detalhes</button><button class="primary-button" id="heroPlay"><span class="play-mark">▶</span> Assistir</button></div></div></section>
+<section class="content-section dynamic-section" id="continueSection" hidden><div class="section-heading"><div><p class="section-kicker">RETOME DE ONDE PAROU</p><h2>Continue Assistindo</h2></div><span class="section-note">Seu último conteúdo fica salvo neste dispositivo</span></div><div id="continueContent" class="horizontal-cards"><div class="section-empty"><span class="empty-mini-icon">▷</span><div><strong>Nada para continuar ainda</strong><p>Quando você abrir um conteúdo, ele aparecerá aqui.</p></div></div></div></section>
+<section class="content-section online-home-section" id="onlineHomeSection">
+  <div class="section-heading"><div><p class="section-kicker">ATUALIZADO ONLINE</p><h2>Lançamentos de 2026</h2></div><span class="section-note" id="onlineStatus">Conectando ao catálogo...</span></div>
+  <div id="newMoviesContent" class="horizontal-cards"><div class="section-empty"><strong>Carregando lançamentos...</strong></div></div>
+  <div class="section-heading online-subheading"><div><p class="section-kicker">EM ALTA</p><h2>Filmes populares</h2></div></div>
+  <div id="trendingMoviesContent" class="horizontal-cards"></div>
+  <div class="section-heading online-subheading"><div><p class="section-kicker">PARA MARATONAR</p><h2>Séries populares</h2></div></div>
+  <div id="trendingSeriesContent" class="horizontal-cards"></div>
+</section>
+
+
+<section class="content-section"><div class="section-heading"><div><p class="section-kicker">NAVEGUE POR CATEGORIA</p><h2>Explore o CineHUB</h2></div><span class="section-note">Use as setas do controle para navegar</span></div><div class="category-grid">
+<button class="category-card category-card-film" data-view="filmes"><span class="category-number">01 / PLAY</span><span class="category-symbol">▰</span><span class="category-name">Filmes</span><span class="category-desc">Grandes histórias, numa tela grande</span><span class="category-arrow">↗</span></button>
+<button class="category-card category-card-series" data-view="series"><span class="category-number">02 / BINGE</span><span class="category-symbol">▤</span><span class="category-name">Séries</span><span class="category-desc">Temporadas e episódios</span><span class="category-arrow">↗</span></button>
+<button class="category-card category-card-live" data-view="ao-vivo"><span class="category-number">03 / LIVE</span><span class="category-symbol">◉</span><span class="category-name">Ao vivo</span><span class="category-desc">Canais e guia de TV</span><span class="category-arrow">↗</span></button>
+<button class="category-card category-card-dorama" data-view="doramas"><span class="category-number">04 / STORY</span><span class="category-symbol">✦</span><span class="category-name">Doramas</span><span class="category-desc">Área de doramas</span><span class="category-arrow">↗</span></button>
+<button class="category-card category-card-anime" data-view="animes"><span class="category-number">05 / ANIME</span><span class="category-symbol">◇</span><span class="category-name">Animes</span><span class="category-desc">Área de animes</span><span class="category-arrow">↗</span></button>
+</div></section>
+<section class="content-section setup-section"><div class="development-card"><span class="development-icon">✦</span><div><p class="section-kicker">CINEHUB EM EVOLUÇÃO</p><h2>Projeto em desenvolvimento</h2><p>Estamos trabalhando para oferecer a melhor experiência possível. Nesta fase, alguns bugs podem acontecer — obrigado por fazer parte dessa evolução.</p></div><span class="development-status">EM CONSTRUÇÃO</span></div></section>
+</main>
+<section class="catalog-view" id="catalogView" hidden tabindex="-1">
+  <div class="catalog-heading"><button class="back-button" id="backHome" aria-label="Voltar à Home">← <span>Home</span></button><div><p class="section-kicker" id="catalogKicker">CINEHUB TV</p><h1 id="catalogTitle">Filmes</h1><p class="catalog-description" id="catalogDescription"></p></div></div>
+  <div class="catalog-browser" id="catalogBrowser">
+    <aside class="catalog-sidebar">
+      <div class="catalog-toolbar" id="catalogToolbar"><div><span class="section-kicker">EXPLORE POR ESTILO</span><h2>Categorias</h2></div><span class="catalog-count" id="catalogCount">CONECTANDO…</span></div>
+      <div class="catalog-search-layout" id="catalogSearchLayout">
+        <div class="search-console"><label for="searchInput" id="searchLabel">Pesquisar neste catálogo</label><div class="search-input-wrap"><span aria-hidden="true">⌕</span><input id="searchInput" type="search" placeholder="Digite o nome..." autocomplete="off" aria-label="Pesquisar conteúdo"><button id="clearSearch" type="button" aria-label="Limpar pesquisa">×</button></div>
+          <p id="searchSummary" class="search-summary" aria-live="polite">Digite para pesquisar no catálogo local e online.</p>
+          <div class="onscreen-keyboard" id="onscreenKeyboard" aria-label="Teclado na tela">
+        <div class="keyboard-row"><button data-key="1">1</button><button data-key="2">2</button><button data-key="3">3</button><button data-key="4">4</button><button data-key="5">5</button><button data-key="6">6</button><button data-key="7">7</button><button data-key="8">8</button><button data-key="9">9</button><button data-key="0">0</button></div>
+        <div class="keyboard-row"><button data-key="Q">Q</button><button data-key="W">W</button><button data-key="E">E</button><button data-key="R">R</button><button data-key="T">T</button><button data-key="Y">Y</button><button data-key="U">U</button><button data-key="I">I</button><button data-key="O">O</button><button data-key="P">P</button></div>
+        <div class="keyboard-row"><button data-key="A">A</button><button data-key="S">S</button><button data-key="D">D</button><button data-key="F">F</button><button data-key="G">G</button><button data-key="H">H</button><button data-key="J">J</button><button data-key="K">K</button><button data-key="L">L</button></div>
+        <div class="keyboard-row"><button data-key="Z">Z</button><button data-key="X">X</button><button data-key="C">C</button><button data-key="V">V</button><button data-key="B">B</button><button data-key="N">N</button><button data-key="M">M</button><button data-key="BACKSPACE" class="key-wide">⌫</button></div>
+        <div class="keyboard-row keyboard-bottom"><button data-key="SPACE" class="key-space">ESPAÇO</button><button data-key="CLEAR" class="key-clear">LIMPAR</button></div>
+      </div>
+    </div>
+    </div>
+
+      <div class="category-rail" id="categoryRail" aria-label="Filtrar por categoria"></div>
+      <button class="guide-shortcut" id="guideShortcut" data-view="guia" hidden>▤ <span>Guia de programação</span> ↗</button>
+    </aside>
+    <div class="catalog-primary">
+      <div class="search-results-area" id="searchResultsArea" hidden><div class="search-results-heading"><div><span class="section-kicker">RESULTADOS</span><h3>Resultados da pesquisa</h3></div><span class="results-count" id="resultsCount">0 itens</span></div><div id="searchResults" class="catalog-grid search-results-grid"></div><div id="searchEmpty" class="search-empty" hidden><span>⌕</span><strong>Nenhum resultado encontrado</strong><p>Tente outro termo de pesquisa.</p></div></div>
+      <div class="catalog-default-content" id="catalogDefaultContent">
+        <section class="catalog-subsection" id="favoritesSection"><div class="section-heading"><div><p class="section-kicker">ESCOLHIDOS POR VOCÊ</p><h2 id="catalogFavoritesTitle">Seus favoritos de Filmes</h2></div><span class="section-note">Sua seleção</span></div><div id="catalogFavorites" class="horizontal-cards"></div></section>
+        <section class="catalog-subsection" id="catalogShelfSection"><div class="section-heading"><div><p class="section-kicker">CATÁLOGO CINEHUB</p><h2 id="catalogShelfTitle">Filmes para descobrir</h2></div></div><div id="catalogCards" class="catalog-grid"></div><div class="empty-state" id="emptyState" hidden><div class="empty-emblem"><img src="assets/logos/simbolo.png" alt=""></div><p class="empty-kicker">CINEHUB</p><h2>Não encontramos conteúdos nesta área.</h2><p>Experimente outra categoria ou pesquise no catálogo online.</p><button class="primary-button" id="emptyBack">Voltar à Home</button></div></section>
+      </div>
+      <aside class="live-guide-panel" id="liveGuidePanel" hidden><div><span class="section-kicker">AO VIVO</span><h2>Guia de programação</h2><p>Consulte a programação disponível nos seus canais.</p></div><button class="secondary-button" data-view="guia">Abrir Guia ↗</button></aside>
+    </div>
+  </div>
+</section>
+<dialog id="detailsDialog" class="settings-dialog details-dialog"><div class="dialog-inner"><div class="search-title-row"><div><p class="section-kicker">CATÁLOGO ONLINE</p><h2 id="detailsTitle">Detalhes do conteúdo</h2></div><button type="button" class="close-button" id="closeDetails" aria-label="Fechar detalhes">×</button></div><div id="detailsBody" class="details-body"></div></div></dialog>
+<dialog id="settingsDialog" class="settings-dialog"><div class="dialog-inner"><div class="search-title-row"><div><p class="section-kicker">CINEHUB TV</p><h2>Configurações</h2></div><button type="button" class="close-button" id="closeSettings" aria-label="Fechar configurações">×</button></div><div class="settings-row"><div><strong>Relógio</strong><p>Horário de São Paulo (America/Sao_Paulo)</p></div><span class="setting-pill">ATIVO</span></div><div class="settings-row"><div><strong>Dados locais</strong><p>Favoritos e Continue Assistindo ficam salvos neste navegador.</p></div><button class="outline-button" id="clearLocalData">Limpar</button></div><p class="settings-feedback" id="settingsFeedback" aria-live="polite"></p></div></dialog>
+<footer class="footer"><span>CINEHUB TV</span><span>VERSÃO 1.2.8 · EXPERIÊNCIA DE TV</span></footer></div><script src="js/webdata.js"></script><script src="js/app.js"></script>
+<script src="dados/canais.js"></script>
+<script src="js/legacy-bridge.js"></script></body></html>
