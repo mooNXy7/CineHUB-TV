@@ -23,6 +23,10 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = false
+            // Explicitly bind the official release variant to the CI-provided signing key.
+            if (!releaseStorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 
