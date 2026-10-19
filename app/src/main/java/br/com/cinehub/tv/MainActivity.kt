@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     private fun d(value: Int): Int =
         (value * resources.displayMetrics.density + 0.5f).toInt().coerceAtLeast(if (value > 0) 1 else value)
 
-    private lateinit var root: LinearLayout
+    private lateinit var root: ViewGroup
     private lateinit var content: LinearLayout
     private val sections = listOf("Início", "Ao vivo", "Filmes", "Séries", "Animes", "Doramas", "Rádio", "Minha lista", "Buscar", "Ajustes")
     private val io = Executors.newSingleThreadExecutor()
