@@ -13,8 +13,8 @@ android {
         applicationId = "br.com.cinehub.tv"
         minSdk = 23
         targetSdk = 28
-        versionCode = 137
-        versionName = "1.3.7-home-live-radio-test"
+        versionCode = 138
+        versionName = "1.3.8-full-visual-test"
     }
 
     compileOptions {
