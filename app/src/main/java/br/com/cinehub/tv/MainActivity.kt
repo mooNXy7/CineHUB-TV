@@ -881,52 +881,96 @@ private fun normalizeMediaTitle(value: String): String =
 
     private fun showRadioStations() {
         content.removeAllViews()
-        content.setPadding(d(42), d(118), d(42), d(36))
-        content.addView(label("RÁDIO", 12, RED, true).apply { setPadding(0, 0, 0, d(5)) })
-        content.addView(label("Encontre a trilha sonora do seu momento", 28, WHITE, true).apply { setPadding(0, 0, 0, d(7)) })
-        content.addView(label("Pesquise pelo nome da estação. A busca considera apenas o catálogo de rádios.", 14, MUTED, false).apply { setPadding(0, 0, 0, d(18)) })
+        content.setPadding(d(34), d(112), d(34), d(28))
+        content.addView(label("RÁDIO", 12, RED, true).apply { letterSpacing = 0.16f })
+        content.addView(label("Sua estação, seu momento", 28, WHITE, true).apply { setPadding(0, d(4), 0, d(5)) })
+        content.addView(label("Escolha uma rádio na lista. A reprodução abre no player CineHUB.", 14, MUTED, false).apply { setPadding(0, 0, 0, d(14)) })
         val search = EditText(this).apply {
-            hint = "Buscar rádio pelo nome…"; setSingleLine(true); textSize = 16f
-            setTextColor(WHITE); setHintTextColor(MUTED); setPadding(d(18), d(10), d(18), d(10))
+            hint = "Buscar estação…"; setSingleLine(true); textSize = 15f
+            setTextColor(WHITE); setHintTextColor(MUTED); setPadding(d(16), d(8), d(16), d(8))
             imeOptions = EditorInfo.IME_ACTION_SEARCH; background = focusBackground(PANEL)
             isFocusable = true; isFocusableInTouchMode = true
         }
-        content.addView(search, LinearLayout.LayoutParams(-1, d(54)))
-        val status = label("Carregando estações…", 14, MUTED, false).apply { setPadding(0, d(12), 0, d(10)) }
+        content.addView(search, LinearLayout.LayoutParams(-1, d(48)))
+        val status = label("Carregando estações…", 13, MUTED, false).apply { setPadding(0, d(8), 0, d(8)) }
         content.addView(status)
-        val results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        content.addView(results)
+        val split = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
+        val listScroll = ScrollView(this).apply { isVerticalScrollBarEnabled = false; clipToPadding = false }
+        val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 0, d(12), d(12)) }
+        listScroll.addView(list)
+        val playerPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(d(22), d(24), d(22), d(22)); background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = d(20).toFloat(); setColor(0xFF141116.toInt()); setStroke(d(1), 0xFF54212A.toInt())
+            }
+        }
+        val stationLogo = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setBackgroundColor(0xFF211A20.toInt()) }
+        val stationTitle = label("Escolha uma rádio", 22, WHITE, true).apply { gravity = Gravity.CENTER; maxLines = 2; setPadding(0, d(16), 0, d(6)) }
+        val stationSubtitle = label("Estações disponíveis", 13, MUTED, false).apply { gravity = Gravity.CENTER }
+        val playButton = label("▶  OUVIR AGORA", 14, WHITE, true).apply {
+            gravity = Gravity.CENTER; setPadding(d(22), d(14), d(22), d(14)); background = focusBackground(RED)
+            isFocusable = true; isFocusableInTouchMode = true; isEnabled = false
+        }
+        playerPanel.addView(stationLogo, LinearLayout.LayoutParams(d(116), d(116)))
+        playerPanel.addView(stationTitle, LinearLayout.LayoutParams(-1, -2))
+        playerPanel.addView(stationSubtitle, LinearLayout.LayoutParams(-1, -2))
+        playerPanel.addView(View(this), LinearLayout.LayoutParams(1, d(20)))
+        playerPanel.addView(playButton, LinearLayout.LayoutParams(-1, d(52)))
+        split.addView(listScroll, LinearLayout.LayoutParams(0, d(400), 1.12f))
+        split.addView(playerPanel, LinearLayout.LayoutParams(0, d(400), 0.88f).apply { marginStart = d(8) })
+        content.addView(split, LinearLayout.LayoutParams(-1, -2))
         var loadedStations: List<RadioStation> = emptyList()
+        var selectedStation: RadioStation? = null
+        fun playStation(station: RadioStation) {
+            startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
+                putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, arrayListOf(station.streamUrl))
+                putExtra(PlayerActivity.EXTRA_URL, station.streamUrl); putExtra(PlayerActivity.EXTRA_TITLE, station.name)
+                putExtra("cinehub_radio", true); putExtra(PlayerActivity.EXTRA_MEDIA_TYPE, "radio")
+            })
+        }
+        playButton.setOnClickListener { selectedStation?.let { playStation(it) } }
+        fun selectStation(station: RadioStation) {
+            selectedStation = station
+            stationTitle.text = station.name
+            stationSubtitle.text = "RÁDIO ONLINE  •  PRONTA PARA REPRODUZIR"
+            stationLogo.setImageDrawable(android.graphics.drawable.ColorDrawable(0xFF211A20.toInt()))
+            stationLogo.contentDescription = "Logo de " + station.name
+            station.logoUrl?.let { url -> stationLogo.load(url) { crossfade(true); placeholder(android.graphics.drawable.ColorDrawable(0xFF211A20.toInt())); error(android.graphics.drawable.ColorDrawable(0xFF211A20.toInt())) } }
+            playButton.isEnabled = !station.streamUrl.isBlank()
+            playButton.alpha = if (playButton.isEnabled) 1f else 0.5f
+            for (i in 0 until list.childCount) {
+                val row = list.getChildAt(i)
+                val name = row.getTag() as? String
+                row.background = focusBackground(if (name == station.name) 0xFF43131B.toInt() else PANEL)
+            }
+        }
         fun renderStations(query: String) {
-            results.removeAllViews()
-            val filtered = loadedStations.filter { it.name.contains(query.trim(), ignoreCase = true) }.take(160)
+            list.removeAllViews()
+            val filtered = loadedStations.filter { it.name.contains(query.trim(), ignoreCase = true) }.take(240)
             status.text = when {
                 loadedStations.isEmpty() -> "Carregando estações…"
-                query.isNotBlank() && filtered.isEmpty() -> "Nenhuma rádio encontrada para “" + query + "”."
+                query.isNotBlank() && filtered.isEmpty() -> "Nenhuma rádio encontrada para “" + query + "”. "
                 query.isNotBlank() -> filtered.size.toString() + " rádio(s) encontrada(s)"
-                else -> loadedStations.size.toString() + " estações disponíveis · mostrando até 160"
+                else -> loadedStations.size.toString() + " estações · lista completa disponível na busca"
             }
             filtered.forEach { station ->
                 val row = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                    setPadding(d(14), d(10), d(14), d(10)); background = focusBackground(PANEL)
+                    setPadding(d(12), d(9), d(10), d(9)); tag = station.name
+                    background = focusBackground(if (selectedStation?.name == station.name) 0xFF43131B.toInt() else PANEL)
                     isFocusable = true; isFocusableInTouchMode = true
                 }
-                val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; station.logoUrl?.let { load(it) { crossfade(true) } } }
-                row.addView(logo, LinearLayout.LayoutParams(d(58), d(58)).apply { marginEnd = d(16) })
+                val logo = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(0xFF242126.toInt()); station.logoUrl?.let { load(it) { crossfade(true); error(android.graphics.drawable.ColorDrawable(0xFF242126.toInt())) } } }
+                row.addView(logo, LinearLayout.LayoutParams(d(48), d(48)).apply { marginEnd = d(12) })
                 val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-                texts.addView(label(station.name, 17, WHITE, true))
-                texts.addView(label("Rádio online  •  ▶ Reproduzir", 13, MUTED, false).apply { setPadding(0, d(4), 0, 0) })
+                texts.addView(label(station.name, 14, WHITE, true).apply { maxLines = 2 })
+                texts.addView(label("Rádio online", 11, MUTED, false).apply { setPadding(0, d(3), 0, 0) })
                 row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
-                row.setOnClickListener {
-                    startActivity(Intent(this@MainActivity, PlayerActivity::class.java).apply {
-                        putStringArrayListExtra(PlayerActivity.EXTRA_SOURCES, arrayListOf(station.streamUrl))
-                        putExtra(PlayerActivity.EXTRA_URL, station.streamUrl); putExtra(PlayerActivity.EXTRA_TITLE, station.name)
-                        putExtra("cinehub_radio", true); putExtra(PlayerActivity.EXTRA_MEDIA_TYPE, "radio")
-                    })
-                }
-                results.addView(row, LinearLayout.LayoutParams(-1, d(80)).apply { bottomMargin = d(8) })
+                row.setOnFocusChangeListener { view, focused -> if (focused) view.background = focusBackground(0xFF43131B.toInt()) else view.background = focusBackground(if (selectedStation?.name == station.name) 0xFF43131B.toInt() else PANEL) }
+                row.setOnClickListener { selectStation(station) }
+                list.addView(row, LinearLayout.LayoutParams(-1, d(68)).apply { bottomMargin = d(6) })
             }
+            if (selectedStation == null && filtered.isNotEmpty()) selectStation(filtered.first())
         }
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
@@ -937,8 +981,8 @@ private fun normalizeMediaTitle(value: String): String =
             val stations = try { SaimoContentRepository.loadRadios(this@MainActivity) } catch (_: Exception) { emptyList() }
             runOnUiThread {
                 if (currentSection != "Rádio" || showingMediaDetails || isFinishing || isDestroyed) return@runOnUiThread
-                loadedStations = stations
-                if (stations.isEmpty()) status.text = "Não foi possível carregar as rádios. Verifique a conexão e tente novamente."
+                loadedStations = stations.distinctBy { it.name.trim().lowercase(Locale.ROOT) }
+                if (loadedStations.isEmpty()) status.text = "Não foi possível carregar as rádios. Verifique a conexão e tente novamente."
                 else renderStations(search.text.toString())
             }
         }
