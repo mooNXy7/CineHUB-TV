@@ -485,7 +485,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showMediaSection(section: String) {
         content.removeAllViews()
-        content.setPadding(d(42), d(20), d(42), d(40))
+        content.setPadding(d(42), d(118), d(42), d(40))
         val headline = when (section) {
             "Filmes" -> "Qual é o filme de hoje?"
             "Séries" -> "Sua próxima maratona começa aqui"
@@ -881,7 +881,7 @@ private fun normalizeMediaTitle(value: String): String =
 
     private fun showRadioStations() {
         content.removeAllViews()
-        content.setPadding(d(42), d(22), d(42), d(36))
+        content.setPadding(d(42), d(118), d(42), d(36))
         content.addView(label("RÁDIO", 12, RED, true).apply { setPadding(0, 0, 0, d(5)) })
         content.addView(label("Encontre a trilha sonora do seu momento", 28, WHITE, true).apply { setPadding(0, 0, 0, d(7)) })
         content.addView(label("Pesquise pelo nome da estação. A busca considera apenas o catálogo de rádios.", 14, MUTED, false).apply { setPadding(0, 0, 0, d(18)) })
@@ -953,7 +953,6 @@ private fun normalizeMediaTitle(value: String): String =
             background = focusBackground(BG)
             setOnClickListener { showingMediaDetails = false; showSection(currentSection) }
         }
-        content.addView(back, LinearLayout.LayoutParams(-1, d(58)))
         val hero = android.widget.FrameLayout(this).apply { setBackgroundColor(0xFF151515.toInt()); clipChildren = true }
         val backdrop = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
@@ -965,6 +964,18 @@ private fun normalizeMediaTitle(value: String): String =
             background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0x22000000, 0xCC080808.toInt(), 0xFF080808.toInt()))
         }, android.widget.FrameLayout.LayoutParams(-1, -1))
+        back.text = "‹"
+        back.textSize = 22f
+        back.gravity = Gravity.CENTER
+        back.setPadding(0, 0, 0, 0)
+        back.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = d(22).toFloat()
+            setColor(0xAA15151A.toInt())
+            setStroke(d(1), 0x447F7F88)
+        }
+        hero.addView(back, android.widget.FrameLayout.LayoutParams(d(48), d(48), Gravity.TOP or Gravity.START).apply {
+            setMargins(d(28), d(22), 0, 0)
+        })
         val heroInfo = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM; setPadding(d(48), d(26), d(48), d(28)) }
         val typeLabel = when {
             item.type == "movie" -> "FILME"
@@ -1270,6 +1281,7 @@ private fun showMyList() {
 
     private fun showCatalogSearch() {
         content.removeAllViews()
+        content.setPadding(d(42), d(116), d(42), d(36))
         content.addView(label("Buscar no CineHUB", 26, WHITE, true).apply {
             setPadding(d(0), d(12), d(0), d(8))
         })
@@ -1412,6 +1424,7 @@ private fun showMyList() {
 
     private fun showLiveChannels() {
         content.removeAllViews()
+        content.setPadding(d(36), d(116), d(36), d(30))
         content.addView(label("Canais ao vivo", 26, WHITE, true).apply {
             setPadding(d(0), d(12), d(0), d(8))
         })
