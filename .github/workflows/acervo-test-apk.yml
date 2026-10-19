@@ -1,4 +1,4 @@
-name: CineHUB TV 1.3.7 Catalog and Details Test APK
+name: CineHUB TV 1.3.8 Catalog and Details Test APK
 
 on:
   push:
@@ -54,18 +54,18 @@ jobs:
           VERSION_CODE="$("$APKANALYZER" manifest version-code "$APK")"
           VERSION_NAME="$("$APKANALYZER" manifest version-name "$APK")"
           test "$APP_ID" = "br.com.cinehub.tv.test" || { echo "::error::Unexpected test applicationId: $APP_ID"; exit 1; }
-          test "$VERSION_CODE" = "137" || { echo "::error::Unexpected test versionCode: $VERSION_CODE"; exit 1; }
-          test "$VERSION_NAME" = "1.3.7-home-live-radio-test-debug" || { echo "::error::Unexpected test versionName: $VERSION_NAME"; exit 1; }
-          cp "$APK" "CineHUB-TV-1.3.7-HOME-LIVE-RADIO-TEST.apk"
-          sha256sum "CineHUB-TV-1.3.7-HOME-LIVE-RADIO-TEST.apk" | tee "CineHUB-TV-1.3.7-HOME-LIVE-RADIO-TEST.sha256"
+          test "$VERSION_CODE" = "138" || { echo "::error::Unexpected test versionCode: $VERSION_CODE"; exit 1; }
+          test "$VERSION_NAME" = "1.3.8-full-visual-test-debug" || { echo "::error::Unexpected test versionName: $VERSION_NAME"; exit 1; }
+          cp "$APK" "CineHUB-TV-1.3.8-FULL-VISUAL-TEST.apk"
+          sha256sum "CineHUB-TV-1.3.8-FULL-VISUAL-TEST.apk" | tee "CineHUB-TV-1.3.8-FULL-VISUAL-TEST.sha256"
           echo "Verified isolated test package $APP_ID ($VERSION_NAME, code $VERSION_CODE). No release or OTA manifest is published."
 
       - name: Upload APK test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CineHUB-TV-1.3.7-HOME-LIVE-RADIO-TEST
+          name: CineHUB-TV-1.3.8-FULL-VISUAL-TEST
           path: |
-            CineHUB-TV-1.3.7-HOME-LIVE-RADIO-TEST.apk
-            CineHUB-TV-1.3.7-HOME-LIVE-RADIO-TEST.sha256
+            CineHUB-TV-1.3.8-FULL-VISUAL-TEST.apk
+            CineHUB-TV-1.3.8-FULL-VISUAL-TEST.sha256
           if-no-files-found: error
           retention-days: 14
