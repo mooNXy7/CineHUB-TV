@@ -65,35 +65,69 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildHome() {
-        root = LinearLayout(this).apply {
+        root = android.widget.FrameLayout(this).apply {
+            setBackgroundColor(0xFF050507.toInt())
+            clipChildren = false
+        }
+        val scroll = ScrollView(this).apply {
+            clipChildren = false
+            clipToPadding = false
+            setBackgroundColor(0xFF050507.toInt())
+        }
+        content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(BG)
-            setPadding(0, 0, 0, 0)
+            clipChildren = false
+            clipToPadding = false
+            setPadding(0, 0, 0, d(28))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF050507.toInt(), 0xFF10070B.toInt(), 0xFF070609.toInt(), 0xFF13070C.toInt())
+            )
+        }
+        scroll.addView(content)
+        root.addView(scroll, android.widget.FrameLayout.LayoutParams(-1, -1))
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xD9101014.toInt(), 0xB80C0B10.toInt(), 0x55100B10.toInt(), 0x00100B10)
+            )
+            elevation = d(10).toFloat()
         }
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(d(42), d(10), d(42), 0)
-            setBackgroundColor(0xB8080808.toInt())
+            setPadding(d(34), d(10), d(34), d(2))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = d(20).toFloat()
+                setColor(0x66202026)
+                setStroke(d(1), 0x337F7F88)
+            }
         }
-        header.addView(label("Cine", 28, WHITE, true))
-        header.addView(label("HUB", 28, RED, true))
-        val spacer = View(this)
-        header.addView(spacer, LinearLayout.LayoutParams(0, 1, 1f))
-        clockView = label("--:--", 18, WHITE, true)
+        val brand = ImageView(this).apply {
+            setImageResource(R.drawable.cinehub_icon)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = "Marca CineHUB"
+        }
+        header.addView(brand, LinearLayout.LayoutParams(d(42), d(42)).apply { marginEnd = d(10) })
+        header.addView(label("CINEHUB", 19, WHITE, true).apply { letterSpacing = 0.13f })
+        header.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        clockView = label("--:--", 16, WHITE, true)
         header.addView(clockView!!)
         clockTick.run()
-        root.addView(header, LinearLayout.LayoutParams(-1, d(54)))
-
+        overlay.addView(header, LinearLayout.LayoutParams(-1, d(58)).apply { setMargins(d(18), d(8), d(18), 0) })
         val navScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            setPadding(d(28), 0, d(28), 0)
-            setBackgroundColor(0x99080808.toInt())
+            setPadding(d(22), d(3), d(22), d(7))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x66101014, 0x33101014, 0x00101014)
+            )
         }
-        val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         sections.forEach { title ->
-            val item = label(title, 15, if (title == currentSection) WHITE else MUTED, title == currentSection).apply {
-                setPadding(d(16), d(11), d(16), d(11))
+            val item = label(title, 14, if (title == currentSection) WHITE else MUTED, title == currentSection).apply {
+                setPadding(d(15), d(10), d(15), d(10))
                 isFocusable = true
                 isFocusableInTouchMode = true
                 background = navBackground(title == currentSection, false)
@@ -101,23 +135,14 @@ class MainActivity : AppCompatActivity() {
                 setOnFocusChangeListener { view, focused ->
                     view.background = navBackground(title == currentSection, focused)
                     setTextColor(if (title == currentSection || focused) WHITE else MUTED)
-                    setTypeface(typeface, if (title == currentSection) Typeface.BOLD else Typeface.NORMAL)
+                    setTypeface(typeface, if (title == currentSection || focused) Typeface.BOLD else Typeface.NORMAL)
                 }
             }
             nav.addView(item)
         }
         navScroll.addView(nav)
-        root.addView(navScroll, LinearLayout.LayoutParams(-1, d(54)))
-
-        val scroll = ScrollView(this).apply { clipChildren = false; clipToPadding = false }
-        content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            clipChildren = false
-            clipToPadding = false
-            setPadding(d(0), d(0), d(0), d(28))
-        }
-        scroll.addView(content)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        overlay.addView(navScroll, LinearLayout.LayoutParams(-1, d(48)))
+        root.addView(overlay, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
         setContentView(root)
         showSection("Início")
     }
@@ -180,7 +205,7 @@ class MainActivity : AppCompatActivity() {
         val shade = View(this).apply {
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0x10000000, 0x33000000, 0xF5080808.toInt())
+                intArrayOf(0x11000000, 0x44000000, 0xF7050507.toInt())
             )
         }
         hero.addView(shade, android.widget.FrameLayout.LayoutParams(-1, -1))
@@ -190,8 +215,8 @@ class MainActivity : AppCompatActivity() {
             setPadding(d(42), d(24), d(42), d(30))
             isFocusable = false
         }
-        info.addView(label("DESTAQUE", 12, RED, true))
-        homeHeroTitle = label("Descubra sua próxima história", 30, WHITE, true).apply {
+        info.addView(label("EM DESTAQUE", 13, RED, true).apply { letterSpacing = 0.16f })
+        homeHeroTitle = label("Descubra sua próxima história", 32, WHITE, true).apply {
             setPadding(0, d(5), 0, d(5)); maxLines = 2
         }
         info.addView(homeHeroTitle!!)
@@ -203,7 +228,7 @@ class MainActivity : AppCompatActivity() {
         info.addView(homeHeroDescription!!)
         hero.addView(info, android.widget.FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
         hero.setOnClickListener { homeHeroItems.getOrNull(homeHeroIndex)?.let { showMediaDetails(it) } }
-        content.addView(hero, LinearLayout.LayoutParams(-1, d(340)))
+        content.addView(hero, LinearLayout.LayoutParams(-1, d(430)))
 
         val prefs = getSharedPreferences("cinehub-tv", MODE_PRIVATE)
         showContinueWatching()
@@ -317,7 +342,13 @@ class MainActivity : AppCompatActivity() {
     private fun populateHomeChannelRow(container: LinearLayout) {
         if (currentSection != "Início" || container.parent == null) return
         if (container.childCount > 1) container.removeViewAt(1)
-        val allChannels = (channels + readSavedFavoriteChannels()).distinctBy { it.name }.take(16)
+        val requested = listOf("Masterchef Brasil", "Gloob", "24 Chaves", "Cartoon Network", "Todo Mundo Odeia o Chris")
+        val sourceChannels = (channels + readSavedFavoriteChannels()).distinctBy { it.name }
+        val allChannels = requested.mapNotNull { wanted ->
+            sourceChannels.firstOrNull { it.name.contains(wanted, true) ||
+                (wanted == "24 Chaves" && it.name.contains("Chaves", true)) ||
+                (wanted == "Todo Mundo Odeia o Chris" && (it.name.contains("Chris", true) || it.name.contains("Todo Mundo Odeia", true))) }
+        }.distinctBy { it.name }
         if (allChannels.isEmpty()) {
             container.addView(label("Seus canais aparecerão aqui quando a lista terminar de carregar.", 13, MUTED, false)
                 .apply { setPadding(0, d(4), 0, d(12)) })
