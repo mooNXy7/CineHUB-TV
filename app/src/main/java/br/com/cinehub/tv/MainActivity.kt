@@ -64,11 +64,6 @@ class MainActivity : AppCompatActivity() {
         mainHandler.postDelayed({ otaUpdateManager?.checkForUpdate() }, 2500L)
     }
 
-    override fun onDestroy() {
-        CineHUBTelemetry.onAppEnd(this)
-        super.onDestroy()
-    }
-
     private fun buildHome() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1525,6 +1520,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        CineHUBTelemetry.onAppEnd(this)
         otaUpdateManager?.close()
         mainHandler.removeCallbacks(clockTick)
         mainHandler.removeCallbacks(homeHeroTick)
