@@ -15,7 +15,7 @@
   const $=id=>document.getElementById(id);
   const home=$('mainContent'),catalog=$('catalogView'),nav=$('mainNav'),title=$('catalogTitle'),description=$('catalogDescription'),kicker=$('catalogKicker');
   const input=$('searchInput'),searchSummary=$('searchSummary'),searchResults=$('searchResults'),catalogCards=$('catalogCards'),emptyState=$('emptyState');
-  const settingsDialog=$('settingsDialog'),telemetryToggle=$('telemetryToggle');let currentView='inicio',activeCategory='Tudo',loaderTimer=null;
+  const settingsDialog=$('settingsDialog');let currentView='inicio',activeCategory='Tudo',loaderTimer=null;
   const STORE={favorites:'cinehub.v12.favorites',last:'cinehub.v12.last',history:'cinehub.v15.history',welcomed:'cinehub.v13.welcomed'};
   let heroItem=null;
   let catalogItems=[
@@ -174,19 +174,6 @@
   function insertKey(key){const start=input.selectionStart??input.value.length,end=input.selectionEnd??input.value.length;let value=input.value;if(key==='CLEAR')value='';else if(key==='BACKSPACE'){if(start===end&&start>0)value=value.slice(0,start-1)+value.slice(end);else value=value.slice(0,start)+value.slice(end)}else if(key==='SPACE')value=value.slice(0,start)+' '+value.slice(end);else value=value.slice(0,start)+key+value.slice(end);input.value=value;input.focus();const pos=key==='BACKSPACE'?Math.max(0,start-(start===end?1:0)):key==='CLEAR'?0:start+(key==='SPACE'?1:key.length);try{input.setSelectionRange(pos,pos)}catch{}syncSearch()}
   document.addEventListener('click',e=>{const heroDetail=e.target.closest('#heroDetails[data-open-item]');if(heroDetail){openItem(heroDetail.dataset.openItem);return}const heroWatch=e.target.closest('#heroPlay[data-hero-watch]');if(heroWatch){const item=catalogItems.find(x=>String(x.id)===String(heroWatch.dataset.heroWatch))||heroItem;if(item&&item.url){window.location.href=item.url}else if(item){toast('A fonte de reprodução não está vinculada a este título. Abrindo os detalhes disponíveis.','Reprodução',3800);openItem(item.id)}return}const viewBtn=e.target.closest('[data-view]');if(viewBtn){showView(viewBtn.dataset.view);return}const fav=e.target.closest('[data-favorite]');if(fav){e.preventDefault();e.stopPropagation();toggleFavorite(fav.dataset.favorite);return}const open=e.target.closest('[data-open-item]');if(open){openItem(open.dataset.openItem);return}const key=e.target.closest('[data-key]');if(key){insertKey(key.dataset.key);return}const cat=e.target.closest('[data-category]');if(cat){activeCategory=cat.dataset.category;renderCategoryRail(currentView);const items=filteredItems(currentView);catalogCards.innerHTML=items.map(x=>cardMarkup(x)).join('');catalogCards.hidden=!items.length;emptyState.hidden=items.length>0;$('catalogCount').textContent=items.length?`${items.length} ${items.length===1?'ITEM':'ITENS'} · ${activeCategory.toUpperCase()}`:'NENHUM ITEM NESTA CATEGORIA';return}if(e.target.closest('#backHome')||e.target.closest('#emptyBack')){showView('inicio');return}if(e.target.closest('#catalogSearch')){showView('buscar');input.focus();return}if(e.target.closest('#clearSearch')){insertKey('CLEAR');return}if(e.target.closest('#settingsToggle')){settingsDialog.showModal();return}});
   input.addEventListener('input',syncSearch);$('closeDetails').addEventListener('click',()=> $('detailsDialog').close());$('detailsDialog').addEventListener('click',e=>{if(e.target===$('detailsDialog'))$('detailsDialog').close()});$('closeSettings').addEventListener('click',()=>settingsDialog.close());settingsDialog.addEventListener('click',e=>{if(e.target===settingsDialog)settingsDialog.close()});
-  const telemetryPreferenceKey='cinehub.telemetry.enabled';
-  let telemetryStored=false;
-  try{telemetryStored=localStorage.getItem(telemetryPreferenceKey)==='true'}catch{}
-  if(telemetryToggle){
-    telemetryToggle.checked=telemetryStored;
-    telemetryToggle.addEventListener('change',()=>{
-      const enabled=telemetryToggle.checked===true;
-      try{localStorage.setItem(telemetryPreferenceKey,enabled?'true':'false')}catch{}
-      window.CineHUBTelemetry?.setEnabled(enabled);
-      $('settingsFeedback').textContent=enabled?'Diagnóstico anônimo ativado. Você pode desativá-lo a qualquer momento.':'Diagnóstico desativado. Nenhum novo evento será enviado.';
-      toast(enabled?'Obrigado por ajudar a melhorar o CineHUB.':'O envio de diagnóstico foi desativado.', 'Privacidade', 3600);
-    });
-  }
   $('clearLocalData').addEventListener('click',()=>{try{localStorage.removeItem(STORE.favorites);localStorage.removeItem(STORE.last);localStorage.removeItem(STORE.history)}catch{}renderHomeSections();renderCatalogFavorites(currentView);if(currentView!=='inicio')renderCatalog(currentView);$('settingsFeedback').textContent='Favoritos e histórico local foram limpos.';toast('Seus favoritos e histórico locais foram limpos.','Tudo limpo',3200)});
   function updateClock(){const now=new Date();$('brClock').textContent=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(now);$('brClock').dateTime=now.toISOString()}updateClock();setInterval(updateClock,1000);
   document.addEventListener('keydown',e=>{if(settingsDialog.open){if(e.key==='Escape')settingsDialog.close();return}if(['Escape','BrowserBack'].includes(e.key)&&currentView!=='inicio'){e.preventDefault();showView('inicio')}else if(e.key==='Home'&&document.activeElement!==input){e.preventDefault();showView('inicio')}});
