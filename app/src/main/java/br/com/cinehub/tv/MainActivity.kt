@@ -60,6 +60,7 @@ class MainActivity : AppCompatActivity() {
         favoriteNames.addAll(getSharedPreferences("cinehub-tv", MODE_PRIVATE).getStringSet("favorite_channels", emptySet()).orEmpty())
         otaUpdateManager = OtaUpdateManager(this)
         buildHome()
+        CineHUBTelemetry.onAppStart(this)
         mainHandler.postDelayed({ otaUpdateManager?.checkForUpdate() }, 2500L)
     }
 
@@ -1066,9 +1067,8 @@ class MainActivity : AppCompatActivity() {
         content.addView(label("Preferências e manutenção do CineHUB TV", 14, MUTED, false).apply {
             setPadding(d(0), d(0), d(0), d(18))
         })
-        val status = label("Catálogo: ${if (channels.isEmpty()) "ainda não carregado" else "${channels.size} canais em memória"}", 15, MUTED, false).apply {
-            setPadding(d(0), d(10), d(0), d(14))
-        }
+        val status = label("Catálogo: ${if (channels.isEmpty()) "ainda não carregado" else "${channels.size} canais em memória"}", 15, MUTED, false)
+            .apply { setPadding(d(0), d(10), d(0), d(14)) }
         content.addView(status)
         fun action(title: String, description: String, onClick: () -> Unit) {
             val item = LinearLayout(this).apply {
@@ -1083,6 +1083,15 @@ class MainActivity : AppCompatActivity() {
             }
             content.addView(item, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 10 })
         }
+        val telemetryEnabled = CineHUBTelemetry.isEnabled(this)
+        action(
+            if (telemetryEnabled) "Diagnóstico anônimo: ATIVADO" else "Diagnóstico anônimo: DESATIVADO",
+            "Opcional e desligado por padrão. Ajuda a corrigir falhas enviando versão do app, plataforma e eventos técnicos agregados. Não envia títulos assistidos, pesquisas, URLs de reprodução ou dados pessoais. O serviço recebe dados técnicos da conexão."
+        ) {
+            val next = !CineHUBTelemetry.isEnabled(this)
+            CineHUBTelemetry.setEnabled(this, next)
+            showSettings()
+        }
         action("Atualizar catálogo de canais", "Busca novamente as fontes públicas conectadas.") {
             status.text = "Atualizando catálogo…"
             io.execute {
@@ -1092,7 +1101,7 @@ class MainActivity : AppCompatActivity() {
                         channels = loaded
                         status.text = "Catálogo atualizado: ${loaded.size} canais disponíveis."
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     runOnUiThread { status.text = "Não foi possível atualizar. Confira a internet e tente novamente." }
                 }
             }
@@ -1111,8 +1120,8 @@ class MainActivity : AppCompatActivity() {
             status.text = "Verificando atualizações…"
             otaUpdateManager?.checkForUpdate(force = true) { message -> status.text = message }
         }
-        action("Sobre o CineHUB TV", "Versão nativa 1.3.1 • Interface Android/Kotlin • Player Media3") {
-            status.text = "CineHUB TV Kotlin 1.3.1 • Atualizações OTA disponíveis nesta edição."
+        action("Sobre o CineHUB TV", "Versão nativa 1.3.3 • Interface Android/Kotlin • Player Media3") {
+            status.text = "CineHUB TV Kotlin 1.3.3 • Atualizações OTA disponíveis nesta edição."
         }
     }
 
@@ -1511,6 +1520,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        CineHUBTelemetry.onAppEnd(this)
         otaUpdateManager?.close()
         mainHandler.removeCallbacks(clockTick)
         mainHandler.removeCallbacks(homeHeroTick)
