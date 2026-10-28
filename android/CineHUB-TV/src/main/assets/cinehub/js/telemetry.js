@@ -20,8 +20,11 @@
       return (c === 'x' ? r : (r & 3 | 8)).toString(16);
     });
   };
-  const storageGet = (storage, key) => { try { return storage.getItem(key); } catch (_) { return null; } };
-  const storageSet = (storage, key, value) => { try { storage.setItem(key, value); return true; } catch (_) { return false; } };
+  const safeStorage = name => { try { return window[name]; } catch (_) { return null; } };
+  const storageGet = (storage, key) => { try { return storage ? storage.getItem(key) : null; } catch (_) { return null; } };
+  const storageSet = (storage, key, value) => { try { if (!storage) return false; storage.setItem(key, value); return true; } catch (_) { return false; } };
+  const localStore = safeStorage('localStorage');
+  const sessionStore = safeStorage('sessionStorage');
   const getOrCreate = (storage, key) => {
     const current = storageGet(storage, key);
     if (current) return current;
@@ -38,7 +41,7 @@
   const versionMatch = ua.match(/CineHUB-(?:Mobile|TV)\/([0-9.]+)/i);
   const appVersion = versionMatch?.[1] || 'unknown';
 
-  let enabled = storageGet(window.localStorage, PREFERENCE_KEY) === 'true';
+  let enabled = storageGet(localStore, PREFERENCE_KEY) === 'true';
   let heartbeat = null;
   let installationId = null;
   let sessionId = null;
@@ -52,8 +55,8 @@
   };
   const send = (event, properties = {}) => {
     if (!enabled || !allowedEvents.has(event)) return;
-    if (!installationId) installationId = getOrCreate(window.localStorage, 'cinehub_telemetry_installation_id');
-    if (!sessionId) sessionId = getOrCreate(window.sessionStorage, 'cinehub_telemetry_session_id');
+    if (!installationId) installationId = getOrCreate(localStore, 'cinehub_telemetry_installation_id');
+    if (!sessionId) sessionId = getOrCreate(sessionStore, 'cinehub_telemetry_session_id');
     const payload = {
       event_id: uuid(), event, app_id: appId, platform, app_version: appVersion,
       installation_id: installationId, session_id: sessionId,
@@ -91,7 +94,7 @@
   window.CineHUBTelemetry = {
     setEnabled(value) {
       enabled = value === true;
-      storageSet(window.localStorage, PREFERENCE_KEY, enabled ? 'true' : 'false');
+      storageSet(localStore, PREFERENCE_KEY, enabled ? 'true' : 'false');
       if (enabled) start();
       else stopHeartbeat();
     },
