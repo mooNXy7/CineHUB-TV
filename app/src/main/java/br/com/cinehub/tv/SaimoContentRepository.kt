@@ -14,7 +14,7 @@ data class RadioStation(
 )
 
 object SaimoContentRepository {
-    private const val BASE = "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/"
+    private const val BASE = "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/"
     private val urlRegex = Regex("""https?://[^\s|,<>"]+""", RegexOption.IGNORE_CASE)
 
     fun loadRadios(context: Context): List<RadioStation> {
