@@ -1,9 +1,9 @@
-name: CineHUB TV Kotlin — Official OTA Release (v1.3.3)
+name: CineHUB TV Kotlin — Official OTA Release (v1.3.4)
 
 on:
   push:
     branches:
-      - release/kotlin-ota-v1.3.3
+      - release/kotlin-ota-v1.3.4
   workflow_dispatch:
 
 permissions:
@@ -89,8 +89,8 @@ jobs:
           EXPECTED_CERT="$(keytool -exportcert -keystore "$CINEHUB_TV_KEYSTORE_PATH" -storepass "$CINEHUB_TV_KEYSTORE_PASSWORD" -alias "$CINEHUB_TV_KEY_ALIAS" | sha256sum | awk '{print $1}')"
           ACTUAL_CERT="$("$APKSIGNER" verify --print-certs "$APK" | sed -nE 's/.*certificate SHA-256 digest: ([0-9A-Fa-f]+)$/\1/p' | head -n 1 | tr '[:upper:]' '[:lower:]')"
           test "$APP_ID" = "br.com.cinehub.tv" || { echo "::error::Unexpected applicationId: $APP_ID"; exit 1; }
-          test "$VERSION_CODE" = "133" || { echo "::error::Expected versionCode 133, got $VERSION_CODE"; exit 1; }
-          test "$VERSION_NAME" = "1.3.3" || { echo "::error::Expected versionName 1.3.3, got $VERSION_NAME"; exit 1; }
+          test "$VERSION_CODE" = "134" || { echo "::error::Expected versionCode 133, got $VERSION_CODE"; exit 1; }
+          test "$VERSION_NAME" = "1.3.4" || { echo "::error::Expected versionName 1.3.3, got $VERSION_NAME"; exit 1; }
           test -n "$EXPECTED_CERT"
           test "$EXPECTED_CERT" = "$ACTUAL_CERT" || { echo "::error::APK certificate does not match the supplied release keystore"; exit 1; }
           APK_NAME="CineHUB-TV-Kotlin-v${VERSION_NAME}.apk"
