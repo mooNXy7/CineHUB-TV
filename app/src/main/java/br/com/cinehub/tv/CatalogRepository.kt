@@ -21,7 +21,7 @@ data class TvChannel(
 
 object CatalogRepository {
     private const val REFERENCE_URL =
-        "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/catalogo.txt"
+        "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/catalogo.txt"
     private const val ACERVO_URL =
         "https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/catalog/channels/channels.json"
 
