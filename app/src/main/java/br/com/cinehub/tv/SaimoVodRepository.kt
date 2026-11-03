@@ -17,7 +17,7 @@ import java.util.concurrent.Executors
  * downloads do catálogo inteiro nem apagar uma cópia válida quando a rede cai.
  */
 object SaimoVodRepository {
-    private const val BASE = "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/vod/"
+    private const val BASE = "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/vod/"
     private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
     private val memory = ConcurrentHashMap<String, String>()
 
