@@ -19,7 +19,7 @@ import java.io.File
 @UnstableApi
 object Remote {
 
-    private const val BASE = "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/"
+    private const val BASE = "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/"
     /// O catálogo inteiro, com chave de ClearKey, Referer e agente. É a lista
     /// que manda: editar este arquivo troca um link sem recompilar nada.
     private const val CATALOG_URL = BASE + "catalogo.txt"
