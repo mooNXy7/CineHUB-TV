@@ -61,7 +61,7 @@ object Legendas {
         synchronized(fragmentos) { fragmentos[nome] }?.let { return it[tmdbId] }
         // Sem o fragmento (rede fora, título ainda não mapeado) não guarda nada:
         // a próxima abertura tenta de novo.
-        val corpo = texto("${"https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/vod/"}imdb/$nome.txt") ?: return null
+        val corpo = texto("${"https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/vod/"}imdb/$nome.txt") ?: return null
         val mapa = HashMap<Int, String>()
         for (linha in corpo.lineSequence()) {
             val partes = linha.split('\t')
