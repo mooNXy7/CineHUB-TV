@@ -28,7 +28,7 @@ const CFG={
     ['CineHUB · Itália','dados/listas/CanaisItalia.m3u8'],
     ['CineHUB · Itália (alternativa)','https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/CanaisItalia.m3u8']
   ],
-  saimo:'https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/catalogo.txt',
+  saimo:'https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/catalogo.txt',
   catalog:'https://raw.githubusercontent.com/Ramys/Iptv-Brasil-2026/master/Filmes-Series.m3u8'
 };
 const state={saimo:false,loading:false,lastError:null,loaded:new Set(),logoMap:null,logoPromise:null,lastUpdate:Number(localStorage.getItem('cinehub_lists_updated')||0),channelIndex:null,groupSet:null,renderTimer:null,pendingDispatch:false,activeLoads:0};
