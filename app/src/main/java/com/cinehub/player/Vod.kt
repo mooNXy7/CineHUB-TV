@@ -48,7 +48,7 @@ data class SerieColecao(
 @UnstableApi
 object Vod {
 
-    internal const val BASE = "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/vod/"
+    internal const val BASE = "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/vod/"
 
     /** Letra -> quantos filmes, séries e reservados começam com ela. */
     data class Gaveta(val letra: String, val filmes: Int, val series: Int, val reservados: Int)
