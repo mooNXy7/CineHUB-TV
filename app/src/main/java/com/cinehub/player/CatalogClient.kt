@@ -21,7 +21,7 @@ object CatalogClient {
     private const val BASE =
         "https://raw.githubusercontent.com/mooNXy7/CineHUB-ACERVO/main/"
     private const val SAIMO_BASE =
-        "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/"
+        "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/"
     private val executor = Executors.newSingleThreadExecutor()
     @Volatile private var appContext: Context? = null
     fun initialize(context: Context) { appContext = context.applicationContext }
