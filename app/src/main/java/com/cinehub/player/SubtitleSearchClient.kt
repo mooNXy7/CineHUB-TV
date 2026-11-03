@@ -20,7 +20,7 @@ internal data class OnlineSubtitleOption(
  * All requests run off the main thread and failure leaves manual URL subtitles available.
  */
 internal object SubtitleSearchClient {
-    private const val SAIMO_BASE = "https://raw.githubusercontent.com/gabrielsaimo/SaimoPlayer/main/"
+    private const val SAIMO_BASE = "https://raw.githubusercontent.com/fki1976/SaimoPlayer/main/"
     private const val SERVICE = "https://opensubtitles-v3.strem.io/subtitles"
     private const val MAX_RESPONSE_BYTES = 512 * 1024
     private val executor = Executors.newSingleThreadExecutor()
