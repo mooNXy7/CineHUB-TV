@@ -1,9 +1,6 @@
 name: CineHUB TV 1.3.2 Player Upgrade Test APK
 
 on:
-  push:
-    branches:
-      - "test/**"
   workflow_dispatch:
 
 permissions:
